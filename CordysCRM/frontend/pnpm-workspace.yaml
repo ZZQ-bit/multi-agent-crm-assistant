@@ -1,0 +1,10 @@
+packages:
+  # all packages in direct subdirs of packages/
+  - "packages/*"
+allowBuilds:
+  '@parcel/watcher': true
+  core-js: true
+  esbuild: true
+  unrs-resolver: true
+  vue-demi: true
+  vue-echarts: true

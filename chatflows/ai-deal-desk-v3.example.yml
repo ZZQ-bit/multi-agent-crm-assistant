@@ -1,0 +1,3495 @@
+app:
+  description: 'AI Deal Desk Phase 4 stable Chatflow for CRM deal review and writeback.
+
+
+    【模型 / 工具选型矩阵 · 2026-07-03 维护】
+
+    文本 LLM 节点（全部 siliconflow Pro/zai-org/GLM-5.1, enable_thinking: false）：
+
+    - 主 Agent 参数抽取：extract_params（GLM-5.1，温度 0.2，top_p 1）
+
+    - 检索改写：query_rewrite_v2（GLM-5.1，max_tokens 200，温度 0.2）
+
+    - 规则重排：rerank_rules_v2（GLM-5.1，max_tokens 1200，温度 0.2）
+
+    - 5 个专家/协调 Agent：sales_agent / finance_agent / delivery_agent / legal_agent / coordinator_agent（GLM-5.1）
+
+    - 面向用户的 Agent：preflight_quick_answer / image_direct_answer / finance_task_agent / delivery_task_agent / legal_task_agent / sales_task_agent（GLM-5.1；sales_task_agent max_tokens 1500，温度 0.3）
+
+
+    工具型 Agent 节点：
+
+    - 外部情报检索 Agent：FunctionCalling，模型使用 GLM-5.1，工具为 current_time / Tavily Search / Tavily Extract；只在外部情报门控命中后运行，由 Agent 自主决定是否搜索、是否抓取网页正文。
+
+
+    视觉 LLM 节点：
+
+    - attachment_image_summary：tongyi qwen3.6-plus，温度 0.2，detail=high
+
+
+    知识库：
+
+    - deal_rules_knowledge：single_retrieval_config 配 openai gpt-4o（如需切换国产模型请走 P1 评估），Top K / 重排以导入后 Dify 节点为准
+
+
+    工具依赖：
+
+    - tavily：由外部情报检索 Agent 按需调用 tavily_search / tavily_extract
+
+    - time：由外部情报检索 Agent 按需调用 current_time
+
+
+    协议契约：所有 answer 节点输出仍走现有 protocol JSON（protocolVersion / turnType / answerText / processEvents / boundObject / writeback / warnings），外部接口不变。'
+  icon: briefcase
+  icon_background: '#E0F2FE'
+  icon_type: emoji
+  mode: advanced-chat
+  name: AI Deal Desk - V3 Stable Enhanced
+  use_icon_as_answer_icon: false
+dependencies:
+- current_identifier: null
+  type: marketplace
+  value:
+    marketplace_plugin_unique_identifier: langgenius/openai:0.4.2@21195ee1321849e0a7d4b3f6b2fd8c2be23ea6c7182e1b444ecc4c1711b52468
+    version: null
+- current_identifier: null
+  type: marketplace
+  value:
+    marketplace_plugin_unique_identifier: langgenius/openai_api_compatible:0.0.53@a0dfb462961a03c6a6415d4185043185b01017c64da93cf82a9e5ecaf59f8ed0
+    version: null
+kind: app
+version: 0.6.0
+workflow:
+  conversation_variables:
+  - description: 当前待确认写入草稿 ID
+    id: 0fcbcff0-3c62-4f0f-a2cb-7d4f88b54811
+    name: active_writeback_id
+    selector:
+    - conversation
+    - active_writeback_id
+    value: ''
+    value_type: string
+  - description: 当前待确认写入草稿状态
+    id: 488a2f8d-e971-4db0-a3bd-0450e10c2ae2
+    name: active_writeback_status
+    selector:
+    - conversation
+    - active_writeback_status
+    value: ''
+    value_type: string
+  - description: 当前待确认写入草稿类型
+    id: f6d7d452-19c5-403b-9f47-3088d5c8db0a
+    name: active_writeback_type
+    selector:
+    - conversation
+    - active_writeback_type
+    value: ''
+    value_type: string
+  - description: 当前待确认写入草稿 payload
+    id: 54f17a72-c725-4aeb-a63e-c5cc8d529436
+    name: active_writeback_payload_json
+    selector:
+    - conversation
+    - active_writeback_payload_json
+    value: ''
+    value_type: string
+  environment_variables:
+  - description: 'CordysCRM AI Deal Desk Dify Tool Gateway base URL. Example: http://localhost:8081/anonymous/ai/deal-desk/dify-tools'
+    id: b0766b1f-b993-4693-b455-b086070c759e
+    name: CRM_TOOL_BASE_URL
+    selector:
+    - env
+    - CRM_TOOL_BASE_URL
+    value: https://your-domain.example.com/anonymous/ai/deal-desk/dify-tools
+    value_type: string
+  - description: CordysCRM AI Deal Desk Dify Tool Gateway token.
+    id: 68ebf210-6a89-4bd7-9151-7792404e05ac
+    name: DIFY_TOOL_TOKEN
+    selector:
+    - env
+    - DIFY_TOOL_TOKEN
+    value: replace-with-your-own-token
+    value_type: string
+  features:
+    file_upload:
+      allowed_file_extensions:
+      - .JPG
+      - .JPEG
+      - .PNG
+      - .GIF
+      - .WEBP
+      - .SVG
+      allowed_file_types:
+      - image
+      allowed_file_upload_methods:
+      - local_file
+      - remote_url
+      enabled: false
+      fileUploadConfig:
+        attachment_image_file_size_limit: 2
+        audio_file_size_limit: 50
+        batch_count_limit: 5
+        file_size_limit: 15
+        file_upload_limit: 50
+        image_file_batch_limit: 10
+        image_file_size_limit: 10
+        single_chunk_attachment_limit: 10
+        video_file_size_limit: 100
+        workflow_file_upload_limit: 10
+      image:
+        enabled: false
+        number_limits: 3
+        transfer_methods:
+        - local_file
+        - remote_url
+      number_limits: 3
+    opening_statement: ''
+    retriever_resource:
+      enabled: false
+    sensitive_word_avoidance:
+      enabled: false
+    speech_to_text:
+      enabled: false
+    suggested_questions: []
+    suggested_questions_after_answer:
+      enabled: false
+    text_to_speech:
+      enabled: false
+      language: ''
+      voice: ''
+  graph:
+    edges:
+    - data:
+        isInIteration: false
+        sourceType: start
+        targetType: code
+      id: start-source-attachment_image_state-target
+      selected: false
+      source: start
+      sourceHandle: source
+      target: attachment_image_state
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInIteration: false
+        sourceType: code
+        targetType: if-else
+      id: attachment_image_state-source-attachment_image_gate-target
+      selected: false
+      source: attachment_image_state
+      sourceHandle: source
+      target: attachment_image_gate
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInIteration: false
+        sourceType: if-else
+        targetType: llm
+      id: attachment_image_gate-has_images-attachment_image_summary-target
+      selected: false
+      source: attachment_image_gate
+      sourceHandle: has_images
+      target: attachment_image_summary
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInIteration: false
+        sourceType: if-else
+        targetType: variable-aggregator
+      id: attachment_image_gate-false-attachment_image_text-target
+      selected: false
+      source: attachment_image_gate
+      sourceHandle: 'false'
+      target: attachment_image_text
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInIteration: false
+        sourceType: llm
+        targetType: variable-aggregator
+      id: attachment_image_summary-source-attachment_image_text-target
+      selected: false
+      source: attachment_image_summary
+      sourceHandle: source
+      target: attachment_image_text
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInIteration: false
+        sourceType: variable-aggregator
+        targetType: code
+      id: attachment_image_text-source-attachment_context-target
+      selected: false
+      source: attachment_image_text
+      sourceHandle: source
+      target: attachment_context
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInIteration: false
+        sourceType: code
+        targetType: code
+      id: attachment_context-source-input_parse-target
+      selected: false
+      source: attachment_context
+      sourceHandle: source
+      target: input_parse
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInIteration: false
+        sourceType: code
+        targetType: code
+      id: input_parse-source-conversation_context-target
+      selected: false
+      source: input_parse
+      sourceHandle: source
+      target: conversation_context
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInIteration: false
+        sourceType: code
+        targetType: agent
+      id: conversation_context-source-task_planner-target
+      selected: false
+      source: conversation_context
+      sourceHandle: source
+      target: task_planner
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInIteration: false
+        sourceType: agent
+        targetType: code
+      id: task_planner-source-task_plan_normalize-target
+      selected: false
+      source: task_planner
+      sourceHandle: source
+      target: task_plan_normalize
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInIteration: false
+        sourceType: code
+        targetType: if-else
+      id: task_plan_normalize-source-task_type_gate-target
+      selected: false
+      source: task_plan_normalize
+      sourceHandle: source
+      target: task_type_gate
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInIteration: false
+        sourceType: if-else
+        targetType: llm
+      id: task_type_gate-general_chat-simple_answer-target
+      selected: false
+      source: task_type_gate
+      sourceHandle: general_chat
+      target: simple_answer
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInIteration: false
+        sourceType: if-else
+        targetType: llm
+      id: task_type_gate-image_answer-image_answer-target
+      selected: false
+      source: task_type_gate
+      sourceHandle: image_answer
+      target: image_answer
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInIteration: false
+        sourceType: if-else
+        targetType: code
+      id: task_type_gate-business_task-evidence_router-target
+      selected: false
+      source: task_type_gate
+      sourceHandle: business_task
+      target: evidence_router
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInIteration: false
+        sourceType: if-else
+        targetType: llm
+      id: task_type_gate-false-simple_answer-target
+      selected: false
+      source: task_type_gate
+      sourceHandle: 'false'
+      target: simple_answer
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInIteration: false
+        sourceType: code
+        targetType: if-else
+      id: evidence_router-source-crm_read_gate-target
+      selected: false
+      source: evidence_router
+      sourceHandle: source
+      target: crm_read_gate
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInIteration: false
+        sourceType: if-else
+        targetType: http-request
+      id: crm_read_gate-call_crm-crm_read_request-target
+      selected: false
+      source: crm_read_gate
+      sourceHandle: call_crm
+      target: crm_read_request
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInIteration: false
+        sourceType: if-else
+        targetType: code
+      id: crm_read_gate-false-crm_read_skip-target
+      selected: false
+      source: crm_read_gate
+      sourceHandle: 'false'
+      target: crm_read_skip
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInIteration: false
+        sourceType: http-request
+        targetType: variable-aggregator
+      id: crm_read_request-source-crm_read_merge-target
+      selected: false
+      source: crm_read_request
+      sourceHandle: source
+      target: crm_read_merge
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInIteration: false
+        sourceType: code
+        targetType: variable-aggregator
+      id: crm_read_skip-source-crm_read_merge-target
+      selected: false
+      source: crm_read_skip
+      sourceHandle: source
+      target: crm_read_merge
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInIteration: false
+        sourceType: variable-aggregator
+        targetType: code
+      id: crm_read_merge-source-crm_evidence-target
+      selected: false
+      source: crm_read_merge
+      sourceHandle: source
+      target: crm_evidence
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInIteration: false
+        sourceType: code
+        targetType: if-else
+      id: evidence_router-source-knowledge_gate-target
+      selected: false
+      source: evidence_router
+      sourceHandle: source
+      target: knowledge_gate
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInIteration: false
+        sourceType: if-else
+        targetType: code
+      id: knowledge_gate-need_knowledge-query_rewrite-target
+      selected: false
+      source: knowledge_gate
+      sourceHandle: need_knowledge
+      target: query_rewrite
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInIteration: false
+        sourceType: if-else
+        targetType: code
+      id: knowledge_gate-false-knowledge_skip-target
+      selected: false
+      source: knowledge_gate
+      sourceHandle: 'false'
+      target: knowledge_skip
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInIteration: false
+        sourceType: code
+        targetType: knowledge-retrieval
+      id: query_rewrite-source-deal_rules_knowledge-target
+      selected: false
+      source: query_rewrite
+      sourceHandle: source
+      target: deal_rules_knowledge
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInIteration: false
+        sourceType: knowledge-retrieval
+        targetType: variable-aggregator
+      id: deal_rules_knowledge-source-knowledge_merge-target
+      selected: false
+      source: deal_rules_knowledge
+      sourceHandle: source
+      target: knowledge_merge
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInIteration: false
+        sourceType: code
+        targetType: variable-aggregator
+      id: knowledge_skip-source-knowledge_merge-target
+      selected: false
+      source: knowledge_skip
+      sourceHandle: source
+      target: knowledge_merge
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInIteration: false
+        sourceType: variable-aggregator
+        targetType: code
+      id: knowledge_merge-source-knowledge_evidence-target
+      selected: false
+      source: knowledge_merge
+      sourceHandle: source
+      target: knowledge_evidence
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInIteration: false
+        sourceType: code
+        targetType: if-else
+      id: evidence_router-source-external_gate-target
+      selected: false
+      source: evidence_router
+      sourceHandle: source
+      target: external_gate
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInIteration: false
+        sourceType: if-else
+        targetType: agent
+      id: external_gate-need_external-external_intel_agent-target
+      selected: false
+      source: external_gate
+      sourceHandle: need_external
+      target: external_intel_agent
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInIteration: false
+        sourceType: if-else
+        targetType: code
+      id: external_gate-false-external_skip-target
+      selected: false
+      source: external_gate
+      sourceHandle: 'false'
+      target: external_skip
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInIteration: false
+        sourceType: agent
+        targetType: variable-aggregator
+      id: external_intel_agent-source-external_merge-target
+      selected: false
+      source: external_intel_agent
+      sourceHandle: source
+      target: external_merge
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInIteration: false
+        sourceType: code
+        targetType: variable-aggregator
+      id: external_skip-source-external_merge-target
+      selected: false
+      source: external_skip
+      sourceHandle: source
+      target: external_merge
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInIteration: false
+        sourceType: variable-aggregator
+        targetType: code
+      id: external_merge-source-external_evidence-target
+      selected: false
+      source: external_merge
+      sourceHandle: source
+      target: external_evidence
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInIteration: false
+        sourceType: code
+        targetType: code
+      id: evidence_router-source-attachment_evidence-target
+      selected: false
+      source: evidence_router
+      sourceHandle: source
+      target: attachment_evidence
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInIteration: false
+        sourceType: code
+        targetType: code
+      id: crm_evidence-source-evidence_ledger-target
+      selected: false
+      source: crm_evidence
+      sourceHandle: source
+      target: evidence_ledger
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInIteration: false
+        sourceType: code
+        targetType: code
+      id: knowledge_evidence-source-evidence_ledger-target
+      selected: false
+      source: knowledge_evidence
+      sourceHandle: source
+      target: evidence_ledger
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInIteration: false
+        sourceType: code
+        targetType: code
+      id: external_evidence-source-evidence_ledger-target
+      selected: false
+      source: external_evidence
+      sourceHandle: source
+      target: evidence_ledger
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInIteration: false
+        sourceType: code
+        targetType: code
+      id: attachment_evidence-source-evidence_ledger-target
+      selected: false
+      source: attachment_evidence
+      sourceHandle: source
+      target: evidence_ledger
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInIteration: false
+        sourceType: code
+        targetType: code
+      id: evidence_ledger-source-gap_check-target
+      selected: false
+      source: evidence_ledger
+      sourceHandle: source
+      target: gap_check
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInIteration: false
+        sourceType: code
+        targetType: if-else
+      id: gap_check-source-gap_check_gate-target
+      selected: false
+      source: gap_check
+      sourceHandle: source
+      target: gap_check_gate
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInIteration: false
+        sourceType: if-else
+        targetType: code
+      id: gap_check_gate-need_clarification-gap_answer-target
+      selected: false
+      source: gap_check_gate
+      sourceHandle: need_clarification
+      target: gap_answer
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInIteration: false
+        sourceType: if-else
+        targetType: if-else
+      id: gap_check_gate-answerable-agent_router-target
+      selected: false
+      source: gap_check_gate
+      sourceHandle: answerable
+      target: agent_router
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInIteration: false
+        sourceType: if-else
+        targetType: if-else
+      id: gap_check_gate-false-agent_router-target
+      selected: false
+      source: gap_check_gate
+      sourceHandle: 'false'
+      target: agent_router
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInIteration: false
+        sourceType: if-else
+        targetType: llm
+      id: agent_router-full_review-sales_agent-target
+      selected: false
+      source: agent_router
+      sourceHandle: full_review
+      target: sales_agent
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInIteration: false
+        sourceType: if-else
+        targetType: llm
+      id: agent_router-full_review-finance_agent-target
+      selected: false
+      source: agent_router
+      sourceHandle: full_review
+      target: finance_agent
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInIteration: false
+        sourceType: if-else
+        targetType: llm
+      id: agent_router-full_review-delivery_agent-target
+      selected: false
+      source: agent_router
+      sourceHandle: full_review
+      target: delivery_agent
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInIteration: false
+        sourceType: if-else
+        targetType: llm
+      id: agent_router-full_review-legal_agent-target
+      selected: false
+      source: agent_router
+      sourceHandle: full_review
+      target: legal_agent
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInIteration: false
+        sourceType: if-else
+        targetType: llm
+      id: agent_router-sales-sales_agent-target
+      selected: false
+      source: agent_router
+      sourceHandle: sales
+      target: sales_agent
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInIteration: false
+        sourceType: if-else
+        targetType: llm
+      id: agent_router-finance-finance_agent-target
+      selected: false
+      source: agent_router
+      sourceHandle: finance
+      target: finance_agent
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInIteration: false
+        sourceType: if-else
+        targetType: llm
+      id: agent_router-delivery-delivery_agent-target
+      selected: false
+      source: agent_router
+      sourceHandle: delivery
+      target: delivery_agent
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInIteration: false
+        sourceType: if-else
+        targetType: llm
+      id: agent_router-legal-legal_agent-target
+      selected: false
+      source: agent_router
+      sourceHandle: legal
+      target: legal_agent
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInIteration: false
+        sourceType: if-else
+        targetType: llm
+      id: agent_router-analytics-analytics_agent-target
+      selected: false
+      source: agent_router
+      sourceHandle: analytics
+      target: analytics_agent
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInIteration: false
+        sourceType: if-else
+        targetType: code
+      id: agent_router-no_domain_agent-agent_skip-target
+      selected: false
+      source: agent_router
+      sourceHandle: no_domain_agent
+      target: agent_skip
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInIteration: false
+        sourceType: if-else
+        targetType: code
+      id: agent_router-false-agent_skip-target
+      selected: false
+      source: agent_router
+      sourceHandle: 'false'
+      target: agent_skip
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInIteration: false
+        sourceType: code
+        targetType: variable-aggregator
+      id: agent_skip-source-agent_merge-target
+      selected: false
+      source: agent_skip
+      sourceHandle: source
+      target: agent_merge
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInIteration: false
+        sourceType: llm
+        targetType: variable-aggregator
+      id: sales_agent-source-agent_merge-target
+      selected: false
+      source: sales_agent
+      sourceHandle: source
+      target: agent_merge
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInIteration: false
+        sourceType: llm
+        targetType: variable-aggregator
+      id: finance_agent-source-agent_merge-target
+      selected: false
+      source: finance_agent
+      sourceHandle: source
+      target: agent_merge
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInIteration: false
+        sourceType: llm
+        targetType: variable-aggregator
+      id: delivery_agent-source-agent_merge-target
+      selected: false
+      source: delivery_agent
+      sourceHandle: source
+      target: agent_merge
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInIteration: false
+        sourceType: llm
+        targetType: variable-aggregator
+      id: legal_agent-source-agent_merge-target
+      selected: false
+      source: legal_agent
+      sourceHandle: source
+      target: agent_merge
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInIteration: false
+        sourceType: llm
+        targetType: variable-aggregator
+      id: analytics_agent-source-agent_merge-target
+      selected: false
+      source: analytics_agent
+      sourceHandle: source
+      target: agent_merge
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInIteration: false
+        sourceType: variable-aggregator
+        targetType: llm
+      id: agent_merge-source-business_answer_agent-target
+      selected: false
+      source: agent_merge
+      sourceHandle: source
+      target: business_answer_agent
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInIteration: false
+        sourceType: llm
+        targetType: code
+      id: simple_answer-source-protocol_adapter-target
+      selected: false
+      source: simple_answer
+      sourceHandle: source
+      target: protocol_adapter
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInIteration: false
+        sourceType: llm
+        targetType: code
+      id: image_answer-source-protocol_adapter-target
+      selected: false
+      source: image_answer
+      sourceHandle: source
+      target: protocol_adapter
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInIteration: false
+        sourceType: code
+        targetType: code
+      id: gap_answer-source-protocol_adapter-target
+      selected: false
+      source: gap_answer
+      sourceHandle: source
+      target: protocol_adapter
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInIteration: false
+        sourceType: llm
+        targetType: code
+      id: business_answer_agent-source-protocol_adapter-target
+      selected: false
+      source: business_answer_agent
+      sourceHandle: source
+      target: protocol_adapter
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInIteration: false
+        sourceType: code
+        targetType: answer
+      id: protocol_adapter-source-final_answer-target
+      selected: false
+      source: protocol_adapter
+      sourceHandle: source
+      target: final_answer
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInIteration: false
+        sourceType: if-else
+        targetType: code
+      id: agent_router-crm_light_answer-crm_light_answer-target
+      selected: false
+      source: agent_router
+      sourceHandle: crm_light_answer
+      target: crm_light_answer
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInIteration: false
+        sourceType: code
+        targetType: code
+      id: crm_light_answer-source-protocol_adapter-target
+      selected: false
+      source: crm_light_answer
+      sourceHandle: source
+      target: protocol_adapter
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    nodes:
+    - data:
+        desc: 接收用户在 AI Deal Desk 对话窗口中的自然语言输入。
+        selected: false
+        title: 用户输入
+        type: start
+        variables:
+        - label: 绑定对象类型
+          max_length: 32
+          options: []
+          required: false
+          type: text-input
+          variable: bound_object_type
+        - label: 绑定对象 ID
+          max_length: 128
+          options: []
+          required: false
+          type: text-input
+          variable: bound_object_id
+        - label: 绑定对象名称
+          max_length: 128
+          options: []
+          required: false
+          type: text-input
+          variable: bound_object_name
+        - label: 绑定对象来源
+          max_length: 32
+          options: []
+          required: false
+          type: text-input
+          variable: bound_object_source
+        - label: 路由客户 ID
+          max_length: 128
+          options: []
+          required: false
+          type: text-input
+          variable: route_customer_id
+        - label: 路由商机 ID
+          max_length: 128
+          options: []
+          required: false
+          type: text-input
+          variable: route_opportunity_id
+        - label: 附件摘要
+          max_length: 2000
+          options: []
+          required: false
+          type: paragraph
+          variable: attachments_summary
+        - label: 附件名称
+          max_length: 500
+          options: []
+          required: false
+          type: paragraph
+          variable: attachment_names
+        - label: 当前待确认写入 ID
+          max_length: 128
+          options: []
+          required: false
+          type: text-input
+          variable: active_writeback_id
+        - label: 当前待确认写入状态
+          max_length: 64
+          options: []
+          required: false
+          type: text-input
+          variable: active_writeback_status
+        - label: 当前待确认写入类型
+          max_length: 64
+          options: []
+          required: false
+          type: text-input
+          variable: active_writeback_type
+        - label: 当前待确认写入 payload
+          max_length: 8000
+          options: []
+          required: false
+          type: paragraph
+          variable: active_writeback_payload_json
+        - label: 被对象选择打断的原始问题
+          max_length: 2000
+          options: []
+          required: false
+          type: paragraph
+          variable: resume_query
+        - label: 用户选择的对象类型
+          max_length: 32
+          options: []
+          required: false
+          type: text-input
+          variable: selected_object_type
+        - label: 用户选择的对象 ID
+          max_length: 128
+          options: []
+          required: false
+          type: text-input
+          variable: selected_object_id
+        - label: 用户选择的对象名称
+          max_length: 128
+          options: []
+          required: false
+          type: text-input
+          variable: selected_object_name
+        - allowed_file_extensions:
+          - .JPG
+          - .JPEG
+          - .PNG
+          - .GIF
+          - .WEBP
+          - .SVG
+          allowed_file_types:
+          - image
+          allowed_file_upload_methods:
+          - local_file
+          default: []
+          hide: false
+          hint: 可上传 CRM 截图、报价截图、合同/沟通截图等图片；当前版本只解析图片，不解析 PDF、Word、Excel 等文档。
+          label: 上传图片
+          max_length: 5
+          options: []
+          placeholder: ''
+          required: false
+          type: file-list
+          variable: uploaded_files
+      height: 569
+      id: start
+      position:
+        x: 4342.297396709994
+        y: -412.6395026805457
+      positionAbsolute:
+        x: 4342.297396709994
+        y: -412.6395026805457
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+    - data:
+        code: "def _as_list(value):\n    if value is None:\n        return []\n    if isinstance(value, list):\n        return value\n    return [value]\n\n\ndef _get(item, key):\n    if isinstance(item, dict):\n        return item.get(key)\n    return getattr(item, key, None)\n\n\ndef _is_image(item):\n    file_type = str(_get(item, 'type') or _get(item, 'mime_type') or _get(item, 'mime') or '').lower()\n    name = str(_get(item, 'name') or _get(item, 'filename') or '').lower()\n    image_exts = ('.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg')\n    return file_type == 'image' or file_type.startswith('image/') or name.endswith(image_exts)\n\n\ndef main(uploaded_files=None) -> dict:\n    files = _as_list(uploaded_files)\n    images = [item for item in files if _is_image(item)]\n    return {\n        'has_images': 'true' if images else 'false',\n        'image_count': str(len(images)),\n    }\n"
+        code_language: python3
+        desc: 判断本轮是否上传图片；有图片才进入视觉识别，无图片直接跳过，避免纯文本会话多跑视觉模型。
+        outputs:
+          has_images:
+            children: null
+            type: string
+          image_count:
+            children: null
+            type: string
+        selected: false
+        title: 附件 - 图片状态判断
+        type: code
+        variables:
+        - value_selector:
+          - start
+          - uploaded_files
+          variable: uploaded_files
+      height: 112
+      id: attachment_image_state
+      position:
+        x: 4684.297396709994
+        y: -93.30616934721237
+      positionAbsolute:
+        x: 4684.297396709994
+        y: -93.30616934721237
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+    - data:
+        cases:
+        - case_id: has_images
+          conditions:
+          - comparison_operator: contains
+            id: cond_has_images
+            value: 'true'
+            varType: string
+            variable_selector:
+            - attachment_image_state
+            - has_images
+          id: has_images
+          logical_operator: and
+        desc: 只在本轮确实上传图片时进入视觉识别；没有图片时直接进入图片摘要聚合，保持后续主链路闭合。
+        selected: false
+        title: 附件 - 是否有图片
+        type: if-else
+      height: 208
+      id: attachment_image_gate
+      position:
+        x: 5026.297396709994
+        y: -103.30616934721237
+      positionAbsolute:
+        x: 5026.297396709994
+        y: -103.30616934721237
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+    - data:
+        context:
+          enabled: false
+          variable_selector: []
+        desc: 识别本轮用户上传的图片/截图，按图片里实际能看到的内容如实说明，不预设图片只与某类业务相关，也不假设图片一定属于哪个客户或商机。
+        memory:
+          query_prompt_template: ''
+          role_prefix:
+            assistant: ''
+            user: ''
+          window:
+            enabled: false
+            size: 5
+        model:
+          completion_params:
+            temperature: 0.2
+          mode: chat
+          name: kk
+          provider: langgenius/openai_api_compatible/openai_api_compatible
+        prompt_template:
+        - id: attachment-image-summary-system
+          role: system
+          text: 你是 AI Deal Desk 的图片识别助手，负责如实描述本轮用户上传的图片/截图里能看到的全部内容，包括文字、表格、对话框、界面元素、图表等。 识别不清的地方要明确说明，不要编造。优先使用与 CRM 业务相关的语言来表达，但不要把图片内容强行收窄到“必须是客户/商机/合同/付款”等范围； 如果图片里是与业务无关的内容（例如产品介绍、竞品截图、操作说明、UI 报错等），同样如实输出。最终输出简洁的 Markdown。
+        - id: attachment-image-summary-user
+          role: user
+          text: '请逐张读取本轮用户上传的图片/截图。若系统提供了图片名称，可参考：{{#start.attachment_names#}}。
+
+            如果一次上传了多张图片，每张都要单独分析，最后再合并总结，不要只处理其中一张。
+
+
+            请输出：
+
+            - 图片类型/来源判断
+
+            - 关键文字或业务信息
+
+            - 与客户、商机、风险或下一步动作相关的内容
+
+            - 识别不清或缺失的信息'
+        selected: true
+        title: 附件 - 图片/截图识别
+        type: llm
+        variables: []
+        vision:
+          configs:
+            detail: high
+            variable_selector:
+            - start
+            - uploaded_files
+          enabled: true
+      height: 164
+      id: attachment_image_summary
+      position:
+        x: 5388.297396709994
+        y: -81.45486770220941
+      positionAbsolute:
+        x: 5388.297396709994
+        y: -81.45486770220941
+      selected: true
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+    - data:
+        desc: 汇合图片识别分支；没有图片时输出为空，避免后续节点引用未执行分支。
+        output_type: string
+        selected: false
+        title: 附件 - 图片摘要汇合
+        type: variable-aggregator
+        variables:
+        - - attachment_image_summary
+          - text
+      height: 152
+      id: attachment_image_text
+      position:
+        x: 5750.297396709994
+        y: -6.97283601387911
+      positionAbsolute:
+        x: 5750.297396709994
+        y: -6.97283601387911
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+    - data:
+        code: "def _clean(value):\n    if value is None:\n        return ''\n    if isinstance(value, list):\n        return '\\n\\n'.join(_clean(item) for item in value if _clean(item))\n    if isinstance(value, dict):\n        return '\\n'.join(f'{k}: {_clean(v)}' for k, v in value.items() if _clean(v))\n    return str(value).strip()\n\n\ndef _clip(text, limit=4000):\n    text = _clean(text)\n    if len(text) <= limit:\n        return text\n    return text[:limit].rstrip() + '\\n...[图片识别内容较长，已截断用于保持上下文可控]'\n\n\ndef main(\n    manual_summary: str = '',\n    manual_names: str = '',\n    image_summary: str = '',\n) -> dict:\n    names = _clean(manual_names)\n    parts = []\n    if _clean(manual_summary):\n        parts.append('用户/前端提供的附件摘要：\\n' + _clip(manual_summary, 1500))\n    if _clean(image_summary):\n        title = '图片/截图识别摘要'\n        if names:\n            title += f'（{names}）'\n        parts.append(title + '：\\n' + _clip(image_summary, 3000))\n    summary = '\\n\\n---\\n\\n'.join(parts)\n\
+          \    if not summary and names:\n        summary = '本轮检测到图片附件，但没有识别到可用于分析的业务文本。'\n    return {\n        'attachments_summary': summary,\n        'attachment_names': names,\n        'image_summary': _clean(image_summary),\n    }\n"
+        code_language: python3
+        desc: 合并图片/截图识别结果和前端已有附件摘要，形成下游 Agent 可使用的图片附件上下文。
+        outputs:
+          attachment_names:
+            children: null
+            type: string
+          attachments_summary:
+            children: null
+            type: string
+          image_summary:
+            children: null
+            type: string
+        selected: false
+        title: 附件上下文整理
+        type: code
+        variables:
+        - value_selector:
+          - start
+          - attachments_summary
+          variable: manual_summary
+        - value_selector:
+          - start
+          - attachment_names
+          variable: manual_names
+        - value_selector:
+          - attachment_image_text
+          - output
+          variable: image_summary
+      height: 112
+      id: attachment_context
+      position:
+        x: 6092.297396709994
+        y: 13.02716398612089
+      positionAbsolute:
+        x: 6092.297396709994
+        y: 13.02716398612089
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+    - data:
+        code: "\nimport json\n\n\ndef _clean(value):\n    if value is None:\n        return ''\n    return str(value).strip()\n\n\ndef _json(value):\n    return json.dumps(value, ensure_ascii=False)\n\n\ndef main(\n    user_query: str = '',\n    has_images: str = '',\n    attachment_names: str = '',\n    attachments_summary: str = '',\n    bound_object_type: str = '',\n    bound_object_id: str = '',\n    bound_object_name: str = '',\n    bound_object_source: str = '',\n    route_customer_id: str = '',\n    route_opportunity_id: str = '',\n    selected_object_type: str = '',\n    selected_object_id: str = '',\n    selected_object_name: str = '',\n) -> dict:\n    bound = {}\n    if _clean(bound_object_type) or _clean(bound_object_id) or _clean(bound_object_name):\n        bound = {\n            'objectType': _clean(bound_object_type),\n            'objectId': _clean(bound_object_id),\n            'objectName': _clean(bound_object_name),\n            'source': _clean(bound_object_source) or\
+          \ 'page_context',\n        }\n    elif _clean(selected_object_id):\n        bound = {\n            'objectType': _clean(selected_object_type) or 'opportunity',\n            'objectId': _clean(selected_object_id),\n            'objectName': _clean(selected_object_name),\n            'source': 'user_selection',\n        }\n    elif _clean(route_customer_id):\n        bound = {\n            'objectType': 'customer',\n            'objectId': _clean(route_customer_id),\n            'objectName': '',\n            'source': 'route_context',\n        }\n    elif _clean(route_opportunity_id):\n        bound = {\n            'objectType': 'opportunity',\n            'objectId': _clean(route_opportunity_id),\n            'objectName': '',\n            'source': 'route_context',\n        }\n\n    return {\n        'original_query': _clean(user_query),\n        'has_images': 'true' if _clean(has_images).lower() == 'true' else 'false',\n        'attachment_names': _clean(attachment_names),\n\
+          \        'attachments_summary': _clean(attachments_summary),\n        'bound_object_json': _json(bound),\n        'page_context_text': '\\n'.join([\n            f\"当前绑定对象：{bound.get('objectType', 'none')} {bound.get('objectName', '')} {bound.get('objectId', '')}\".strip(),\n            f\"附件名称：{_clean(attachment_names) or '无'}\",\n            f\"附件摘要：{_clean(attachments_summary) or '无'}\",\n        ]),\n    }\n"
+        code_language: python3
+        desc: 整理用户输入、页面绑定对象和附件摘要。
+        outputs:
+          attachment_names:
+            children: null
+            type: string
+          attachments_summary:
+            children: null
+            type: string
+          bound_object_json:
+            children: null
+            type: string
+          has_images:
+            children: null
+            type: string
+          original_query:
+            children: null
+            type: string
+          page_context_text:
+            children: null
+            type: string
+        selected: false
+        title: 输入解析
+        type: code
+        variables:
+        - value_selector:
+          - sys
+          - query
+          variable: user_query
+        - value_selector:
+          - attachment_image_state
+          - has_images
+          variable: has_images
+        - value_selector:
+          - attachment_context
+          - attachment_names
+          variable: attachment_names
+        - value_selector:
+          - attachment_context
+          - attachments_summary
+          variable: attachments_summary
+        - value_selector:
+          - start
+          - bound_object_type
+          variable: bound_object_type
+        - value_selector:
+          - start
+          - bound_object_id
+          variable: bound_object_id
+        - value_selector:
+          - start
+          - bound_object_name
+          variable: bound_object_name
+        - value_selector:
+          - start
+          - bound_object_source
+          variable: bound_object_source
+        - value_selector:
+          - start
+          - route_customer_id
+          variable: route_customer_id
+        - value_selector:
+          - start
+          - route_opportunity_id
+          variable: route_opportunity_id
+        - value_selector:
+          - start
+          - selected_object_type
+          variable: selected_object_type
+        - value_selector:
+          - start
+          - selected_object_id
+          variable: selected_object_id
+        - value_selector:
+          - start
+          - selected_object_name
+          variable: selected_object_name
+      height: 96
+      id: input_parse
+      position:
+        x: 6434.297396709994
+        y: 13.02716398612089
+      positionAbsolute:
+        x: 6434.297396709994
+        y: 13.02716398612089
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+    - data:
+        code: "\nimport json\n\n\ndef _clean(value):\n    if value is None:\n        return ''\n    return str(value).strip()\n\n\ndef main(\n    original_query: str = '',\n    bound_object_json: str = '',\n    page_context_text: str = '',\n    attachments_summary: str = '',\n) -> dict:\n    return {\n        'original_query': _clean(original_query),\n        'bound_object_json': _clean(bound_object_json) or '{}',\n        'context_text': '\\n'.join([\n            f\"用户问题：{_clean(original_query)}\",\n            _clean(page_context_text),\n            f\"附件摘要：{_clean(attachments_summary) or '无'}\",\n        ]).strip(),\n    }\n"
+        code_language: python3
+        desc: 形成 Planner 和下游证据链共用的会话上下文。
+        outputs:
+          bound_object_json:
+            children: null
+            type: string
+          context_text:
+            children: null
+            type: string
+          original_query:
+            children: null
+            type: string
+        selected: false
+        title: 上下文整理
+        type: code
+        variables:
+        - value_selector:
+          - input_parse
+          - original_query
+          variable: original_query
+        - value_selector:
+          - input_parse
+          - bound_object_json
+          variable: bound_object_json
+        - value_selector:
+          - input_parse
+          - page_context_text
+          variable: page_context_text
+        - value_selector:
+          - input_parse
+          - attachments_summary
+          variable: attachments_summary
+      height: 96
+      id: conversation_context
+      position:
+        x: 6776.297396709994
+        y: 54.69383065278752
+      positionAbsolute:
+        x: 6776.297396709994
+        y: 54.69383065278752
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+    - data:
+        agent_parameters:
+          instruction:
+            type: constant
+            value: "你是 AI Deal Desk 的 Planner。你的任务不是回答用户，而是判断本轮 CRM 工作任务类型、目标对象、需要哪些证据来源、需要哪些领域 Agent，以及回答目标。\n\n你可以使用 CRM 只读工具辅助识别客户或商机。不要调用写入工具，不要生成最终答案。\n\n工具调用边界：只有用户问题需要识别具体客户或商机时才调用 CRM 搜索工具。遇到漏斗、转化、赢单率、收入、回款统计、经营分析、排优先级这类销售管理问题时，直接输出 stats_analysis，不要为了示例客户或“这类商机”调用客户/商机搜索工具。\n\n已绑定对象规则：如果页面上下文或输入变量已经提供 bound_object_id、route_opportunity_id、route_customer_id 或 selected_object_id，说明对象已绑定或已选择完成。此时不要调用 search_customers、search_opportunities、get_customer_context 或 get_opportunity_context；直接使用已绑定对象输出规划，详情统一交给后续 CRM 数据读取节点。\n\n任务类型 task_type 只能取：\ngeneral_chat, image_answer, object_query, progress_summary, sales_assist, finance_check, delivery_check, legal_check, full_review, stats_analysis, content_draft, followup_plan, external_research, unknown。\n\n证据来源 required_sources 包括 crm, knowledge, external, attachment。\n领域 Agent required_agents 包括 sales, finance, delivery, legal, analytics。\n\n回答模式 answer_mode 只能取：list_lookup, detail_lookup, analysis, chart, draft, general。\n多对象策略 multi_object_strategy\
+              \ 只能取：list, ask_clarification, rank, summarize。\n- 用户问“有哪些、列出、查看列表、查询某客户有哪些商机/联系人/跟进记录”时，answer_mode=list_lookup，multi_object_strategy=list；多个结果是正常列表，不是歧义。\n- 用户问“查看某一个客户/商机详情”时，answer_mode=detail_lookup。\n- 用户问风险、推进建议、评审、总结、判断时，answer_mode=analysis；如果匹配多个具体对象，再 ask_clarification。\n- 用户明确要求图表或可视化时，answer_mode=chart。\n- 用户要求邮件、话术、周报、汇报材料时，answer_mode=draft。\n\n路由规则：\n- 普通闲聊、身份介绍、概念解释：general_chat。\n- 用户只要求读取图片/截图内容：image_answer。\n- 查客户/商机/联系人/跟进记录：object_query。\n- 总结当前客户或商机进展：progress_summary。\n- 推进建议、销售动作、拜访提纲：sales_assist。\n- 折扣、付款、账期、回款：finance_check。\n- 上线周期、交付范围、资源、实施：delivery_check。\n- 合同、验收、赔付、责任边界：legal_check。\n- 同时要求销售、财务、交付、合同多视角：full_review。\n- 漏斗、转化、赢单率、收入、回款统计：stats_analysis。\n- 邮件、话术、周报、汇报材料：content_draft。\n- 跟进计划：followup_plan。\n- 官网、新闻、招投标、公开资料、政策、舆情：external_research。\n\n输出硬约束：只能输出一个 JSON 对象，不要 Markdown，不要代码块，不要解释。\nJSON 结构：\n{\n  \"task_type\": \"general_chat\",\n  \"target_object\": {\n    \"object_type\": \"none\",\n    \"object_name\": \"\",\n    \"object_id\"\
+              : \"\",\n    \"relation_target\": \"none\"\n  },\n  \"required_sources\": {\n    \"crm\": false,\n    \"knowledge\": false,\n    \"external\": false,\n    \"attachment\": false\n  },\n  \"required_agents\": {\n    \"sales\": false,\n    \"finance\": false,\n    \"delivery\": false,\n    \"legal\": false,\n    \"analytics\": false\n  },\n  \"answer_mode\": \"general\",\n  \"multi_object_strategy\": \"ask_clarification\",\n  \"answer_goal\": \"\",\n  \"success_criteria\": [],\n  \"reason\": \"\",\n  \"confidence\": 0.0\n}"
+          maximum_iterations:
+            type: constant
+            value: 2
+          model:
+            type: constant
+            value:
+              completion_params:
+                enable_thinking: false
+              mode: chat
+              model: gpt-5.5
+              model_type: llm
+              provider: langgenius/openai_api_compatible/openai_api_compatible
+              type: model-selector
+          query:
+            type: constant
+            value: '用户问题：{{#conversation_context.original_query#}}
+
+
+              页面与附件上下文：
+
+              {{#conversation_context.context_text#}}'
+          tools:
+            type: constant
+            value:
+            - enabled: true
+              extra:
+                description: Search CRM customers by organization or customer name.
+              parameters:
+                includeContextOnUnique:
+                  auto: 1
+                  value: null
+                keyword:
+                  auto: 1
+                  value: null
+                limit:
+                  auto: 1
+                  value: null
+              plugin_id: null
+              provider_name: e152d1b6-0354-41af-9de6-6a188610fa01
+              provider_show_name: AI Deal Desk CRM2
+              settings: {}
+              tool_description: Search CRM customers by organization or customer name.
+              tool_label: search_customers
+              tool_name: search_customers
+              type: api
+            - enabled: true
+              extra:
+                description: Search CRM opportunities by opportunity, project, quote, or customer keyword.
+              parameters:
+                includeContextOnUnique:
+                  auto: 1
+                  value: null
+                keyword:
+                  auto: 1
+                  value: null
+                limit:
+                  auto: 1
+                  value: null
+              plugin_id: null
+              provider_name: e152d1b6-0354-41af-9de6-6a188610fa01
+              provider_show_name: AI Deal Desk CRM2
+              settings: {}
+              tool_description: Search CRM opportunities by opportunity, project, quote, or customer keyword.
+              tool_label: search_opportunities
+              tool_name: search_opportunities
+              type: api
+            - enabled: true
+              extra:
+                description: Get customer profile, related opportunities, contacts, and recent follow-up context.
+              parameters:
+                customerId:
+                  auto: 1
+                  value: null
+                limit:
+                  auto: 1
+                  value: null
+              plugin_id: null
+              provider_name: e152d1b6-0354-41af-9de6-6a188610fa01
+              provider_show_name: AI Deal Desk CRM2
+              settings: {}
+              tool_description: Get customer profile, related opportunities, contacts, and recent follow-up context.
+              tool_label: get_customer_context
+              tool_name: get_customer_context
+              type: api
+            - enabled: true
+              extra:
+                description: Get opportunity detail, customer, contacts, follow-up records, plans, and business context.
+              parameters:
+                limit:
+                  auto: 1
+                  value: null
+                opportunityId:
+                  auto: 1
+                  value: null
+              plugin_id: null
+              provider_name: e152d1b6-0354-41af-9de6-6a188610fa01
+              provider_show_name: AI Deal Desk CRM2
+              settings: {}
+              tool_description: Get opportunity detail, customer, contacts, follow-up records, plans, and business context.
+              tool_label: get_opportunity_context
+              tool_name: get_opportunity_context
+              type: api
+        agent_strategy_label: ReAct
+        agent_strategy_name: ReAct
+        agent_strategy_provider_name: langgenius/agent/agent
+        desc: 只做任务规划、对象识别和能力选择，不直接回答用户。
+        meta:
+          minimum_dify_version: 1.7.0
+          version: 0.0.2
+        output_schema: {}
+        plugin_unique_identifier: langgenius/agent:0.0.40@d00a70e81bfb28fadd52cba7fd7a1f7c344c67b051e4a2e356a06c690736a7c4
+        selected: false
+        title: Planner - 任务理解与规划
+        tool_node_version: '2'
+        type: agent
+      height: 232
+      id: task_planner
+      position:
+        x: 7118.297396709994
+        y: 11.360497319454147
+      positionAbsolute:
+        x: 7118.297396709994
+        y: 11.360497319454147
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+    - data:
+        code: "\nimport json\nimport re\n\n\nVALID_TASK_TYPES = {\n    'general_chat', 'image_answer', 'object_query', 'progress_summary',\n    'sales_assist', 'finance_check', 'delivery_check', 'legal_check',\n    'full_review', 'stats_analysis', 'content_draft', 'followup_plan',\n    'external_research', 'unknown',\n}\n\nVALID_ANSWER_MODES = {\n    'list_lookup', 'detail_lookup', 'analysis', 'chart', 'draft', 'general'\n}\n\nVALID_MULTI_OBJECT_STRATEGIES = {\n    'list', 'ask_clarification', 'rank', 'summarize'\n}\n\n\ndef _clean(value):\n    if value is None:\n        return ''\n    return str(value).strip()\n\n\ndef _load_json(text):\n    text = _clean(text)\n    if not text:\n        return {}\n    try:\n        return json.loads(text)\n    except Exception:\n        match = re.search(r'\\{.*\\}', text, flags=re.S)\n        if not match:\n            return {}\n        try:\n            return json.loads(match.group(0))\n        except Exception:\n            return {}\n\n\ndef _bool(value):\n\
+          \    if isinstance(value, bool):\n        return value\n    return _clean(value).lower() in ['true', '1', 'yes', 'y', '是', '需要']\n\n\ndef _infer_answer_mode(task_type, query, payload):\n    answer_mode = _clean(payload.get('answer_mode')) if isinstance(payload, dict) else ''\n    if answer_mode in VALID_ANSWER_MODES:\n        return answer_mode\n\n    query_text = _clean(query).lower()\n    if task_type in ['general_chat', 'image_answer']:\n        return 'general'\n    if task_type == 'content_draft':\n        return 'draft'\n    if task_type == 'stats_analysis' or any(word in query_text for word in ['图表', '图形', '画图', '可视化', '漏斗图', '柱状图', '折线图', '饼图', 'chart']):\n        return 'chart'\n    if task_type == 'object_query':\n        list_words = ['有哪些', '哪些', '列出', '列表', '查看', '看一下', '查询', '多少个', '全部']\n        if any(word in query_text for word in list_words):\n            return 'list_lookup'\n        return 'detail_lookup'\n    return 'analysis'\n\n\ndef _infer_multi_object_strategy(answer_mode,\
+          \ task_type, payload):\n    strategy = _clean(payload.get('multi_object_strategy')) if isinstance(payload, dict) else ''\n    if strategy in VALID_MULTI_OBJECT_STRATEGIES:\n        return strategy\n    if answer_mode == 'list_lookup':\n        return 'list'\n    if answer_mode == 'chart':\n        return 'summarize'\n    if task_type in ['stats_analysis', 'external_research']:\n        return 'summarize'\n    return 'ask_clarification'\n\n\ndef main(planner_text: str = '', has_images: str = '', bound_object_json: str = '', original_query: str = '') -> dict:\n    payload = _load_json(planner_text)\n    task_type = _clean(payload.get('task_type')) if isinstance(payload, dict) else 'unknown'\n    if task_type not in VALID_TASK_TYPES:\n        task_type = 'unknown'\n\n    image_present = _bool(has_images)\n    if task_type == 'image_answer' and not image_present:\n        task_type = 'general_chat'\n\n    answer_mode = _infer_answer_mode(task_type, original_query, payload)\n    multi_object_strategy\
+          \ = _infer_multi_object_strategy(answer_mode, task_type, payload)\n\n    business_tasks = VALID_TASK_TYPES - {'general_chat', 'image_answer', 'unknown'}\n    if task_type == 'general_chat':\n        route_group = 'general_chat'\n    elif task_type == 'image_answer':\n        route_group = 'image_answer'\n    elif task_type in business_tasks:\n        route_group = 'business_task'\n    else:\n        route_group = 'general_chat'\n\n    required_sources = payload.get('required_sources') if isinstance(payload.get('required_sources'), dict) else {}\n    required_agents = payload.get('required_agents') if isinstance(payload.get('required_agents'), dict) else {}\n    target = payload.get('target_object') if isinstance(payload.get('target_object'), dict) else {}\n    if not target:\n        target = _load_json(bound_object_json)\n\n    if task_type in ['finance_check', 'delivery_check', 'legal_check', 'full_review']:\n        required_sources['knowledge'] = True\n        required_sources['crm']\
+          \ = True\n    if task_type in ['object_query', 'progress_summary', 'sales_assist', 'stats_analysis', 'content_draft', 'followup_plan']:\n        required_sources['crm'] = True\n    if task_type == 'external_research':\n        required_sources['external'] = True\n\n    if task_type == 'object_query' and answer_mode in ['list_lookup', 'detail_lookup']:\n        required_sources['crm'] = True\n        required_agents = {'sales': False, 'finance': False, 'delivery': False, 'legal': False, 'analytics': False}\n\n    if task_type == 'full_review':\n        required_agents.update({'sales': True, 'finance': True, 'delivery': True, 'legal': True})\n    elif task_type == 'finance_check':\n        required_agents['finance'] = True\n    elif task_type == 'delivery_check':\n        required_agents['delivery'] = True\n    elif task_type == 'legal_check':\n        required_agents['legal'] = True\n    elif task_type == 'stats_analysis':\n        required_agents['analytics'] = True\n    elif task_type\
+          \ in ['progress_summary', 'sales_assist', 'content_draft', 'followup_plan', 'external_research']:\n        required_agents['sales'] = True\n\n    if task_type == 'object_query' and answer_mode in ['list_lookup', 'detail_lookup']:\n        agent_route = 'crm_light_answer'\n    elif _bool(required_agents.get('sales')) and _bool(required_agents.get('finance')) and _bool(required_agents.get('delivery')) and _bool(required_agents.get('legal')):\n        agent_route = 'full_review'\n    elif _bool(required_agents.get('finance')):\n        agent_route = 'finance'\n    elif _bool(required_agents.get('delivery')):\n        agent_route = 'delivery'\n    elif _bool(required_agents.get('legal')):\n        agent_route = 'legal'\n    elif _bool(required_agents.get('analytics')):\n        agent_route = 'analytics'\n    elif _bool(required_agents.get('sales')):\n        agent_route = 'sales'\n    else:\n        agent_route = 'none'\n\n    return {\n        'task_type': task_type,\n        'route_group':\
+          \ route_group,\n        'target_object_json': json.dumps(target if isinstance(target, dict) else {}, ensure_ascii=False),\n        'need_crm': 'true' if _bool(required_sources.get('crm')) else 'false',\n        'need_knowledge': 'true' if _bool(required_sources.get('knowledge')) else 'false',\n        'need_external': 'true' if _bool(required_sources.get('external')) else 'false',\n        'need_attachment': 'true' if image_present or _bool(required_sources.get('attachment')) else 'false',\n        'agent_route': agent_route,\n        'answer_mode': answer_mode,\n        'multi_object_strategy': multi_object_strategy,\n        'answer_goal': _clean(payload.get('answer_goal')),\n        'success_criteria_json': json.dumps(payload.get('success_criteria') or [], ensure_ascii=False),\n        'planner_reason': _clean(payload.get('reason')),\n        'planner_confidence': str(payload.get('confidence') or ''),\n    }\n"
+        code_language: python3
+        desc: 解析 Planner JSON，输出稳定任务路由和能力开关。
+        outputs:
+          agent_route:
+            children: null
+            type: string
+          answer_goal:
+            children: null
+            type: string
+          need_attachment:
+            children: null
+            type: string
+          need_crm:
+            children: null
+            type: string
+          need_external:
+            children: null
+            type: string
+          need_knowledge:
+            children: null
+            type: string
+          planner_confidence:
+            children: null
+            type: string
+          planner_reason:
+            children: null
+            type: string
+          route_group:
+            children: null
+            type: string
+          success_criteria_json:
+            children: null
+            type: string
+          target_object_json:
+            children: null
+            type: string
+          task_type:
+            children: null
+            type: string
+          answer_mode:
+            children: null
+            type: string
+          multi_object_strategy:
+            children: null
+            type: string
+        selected: false
+        title: 任务计划标准化
+        type: code
+        variables:
+        - value_selector:
+          - task_planner
+          - text
+          variable: planner_text
+        - value_selector:
+          - input_parse
+          - has_images
+          variable: has_images
+        - value_selector:
+          - conversation_context
+          - bound_object_json
+          variable: bound_object_json
+        - value_selector:
+          - conversation_context
+          - original_query
+          variable: original_query
+      height: 96
+      id: task_plan_normalize
+      position:
+        x: 7460.297396709994
+        y: 99.69383065278751
+      positionAbsolute:
+        x: 7460.297396709994
+        y: 99.69383065278751
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+    - data:
+        cases:
+        - case_id: general_chat
+          conditions:
+          - comparison_operator: contains
+            id: cond_task_type_gate_general_chat
+            value: general_chat
+            varType: string
+            variable_selector:
+            - task_plan_normalize
+            - route_group
+          id: general_chat
+          logical_operator: and
+        - case_id: image_answer
+          conditions:
+          - comparison_operator: contains
+            id: cond_task_type_gate_image_answer
+            value: image_answer
+            varType: string
+            variable_selector:
+            - task_plan_normalize
+            - route_group
+          id: image_answer
+          logical_operator: and
+        - case_id: business_task
+          conditions:
+          - comparison_operator: contains
+            id: cond_task_type_gate_business_task
+            value: business_task
+            varType: string
+            variable_selector:
+            - task_plan_normalize
+            - route_group
+          id: business_task
+          logical_operator: and
+        desc: 普通问答、图片直答和 CRM 业务任务分流。
+        selected: false
+        title: 任务类型路由
+        type: if-else
+      height: 336
+      id: task_type_gate
+      position:
+        x: 3460
+        y: 520.6666666666667
+      positionAbsolute:
+        x: 3460
+        y: 520.6666666666667
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+    - data:
+        context:
+          enabled: false
+          variable_selector: []
+        desc: 普通问答、身份介绍和概念解释，直接回答用户问题。
+        memory:
+          query_prompt_template: ''
+          role_prefix:
+            assistant: ''
+            user: ''
+          window:
+            enabled: true
+            size: 5
+        model:
+          completion_params:
+            enable_thinking: false
+          mode: chat
+          name: kk
+          provider: langgenius/openai_api_compatible/openai_api_compatible
+        prompt_template:
+        - id: preflight-quick-system
+          role: system
+          text: '你是 AI Deal Desk 的轻量问答助手。只处理普通闲聊、身份介绍、概念解释、非常规实时问题和低置信度问题。
+
+
+            回答要求：
+
+            - 直接回答用户问题，保持简洁。
+
+            - 不调用或假装读取 CRM、知识库、外部情报、写回工具。
+
+            - 用户问“今天天气什么样”这类实时问题时，如没有天气工具，就说明当前工作台没有实时天气能力，可建议查看天气应用；不要编造天气。
+
+            - 用户问“你是谁”时，用用户语言说明你是嵌在 CRM 里的 AI Deal Desk 助手，可帮助查客户/商机、总结进展、生成沟通和跟进草稿、做商机评审。
+
+            - 用户问 L2C、赢单率等概念解释时，只解释概念；不要因为关键词进入 CRM 查询或统计。
+
+            - 输出标准 Markdown，不要输出协议 JSON、节点名、路由名或内部字段。'
+        - id: preflight-quick-user
+          role: user
+          text: 用户问题：{{#sys.query#}}
+        selected: false
+        title: 轻量回答
+        type: llm
+        variables: []
+        vision:
+          enabled: false
+      height: 132
+      id: simple_answer
+      position:
+        x: 3822
+        y: 331.66666666666663
+      positionAbsolute:
+        x: 3822
+        y: 331.66666666666663
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+    - data:
+        context:
+          enabled: false
+          variable_selector: []
+        desc: 只基于图片/截图识别内容回答。
+        memory:
+          query_prompt_template: ''
+          role_prefix:
+            assistant: ''
+            user: ''
+          window:
+            enabled: false
+            size: 5
+        model:
+          completion_params:
+            enable_thinking: false
+            max_tokens: 1000
+            temperature: 0.2
+          mode: chat
+          name: kk
+          provider: langgenius/openai_api_compatible/openai_api_compatible
+        prompt_template:
+        - id: image-direct-system
+          role: system
+          text: '你是 AI Deal Desk 的图片直答助手。只基于本轮图片/截图识别摘要回答用户，不进入 CRM 查询、销售运营分析、知识库或外部情报。
+
+
+            回答要求：
+
+            - 如实说明图中可见内容，包括文字、表格、对话框、界面元素、图表等。
+
+            - 如果识别不清，要明确说不清楚，不要编造。
+
+            - 如果没有收到图片或图片摘要为空，直接说明当前没有收到可识别图片。
+
+            - 不要因为截图里出现 CRM、客户、商机、合同、风险等词就扩展成业务评审。
+
+            - 输出简洁 Markdown，不要输出协议 JSON、节点名、路由名或内部字段。'
+        - id: image-direct-user
+          role: user
+          text: '用户问题：{{#sys.query#}}
+
+
+            图片/截图名称：
+
+            {{#attachment_context.attachment_names#}}
+
+
+            图片/截图识别摘要：
+
+            {{#attachment_context.attachments_summary#}}'
+        selected: false
+        title: 图片理解与回答
+        type: llm
+        variables: []
+        vision:
+          enabled: false
+      height: 116
+      id: image_answer
+      position:
+        x: 8066
+        y: 341.21307255631666
+      positionAbsolute:
+        x: 8066
+        y: 341.21307255631666
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+    - data:
+        code: "\nimport json\n\n\ndef _clean(value):\n    if value is None:\n        return ''\n    return str(value).strip()\n\n\ndef _loads(value, fallback):\n    if isinstance(value, (dict, list)):\n        return value\n    text = _clean(value)\n    if not text:\n        return fallback\n    try:\n        return json.loads(text)\n    except Exception:\n        return fallback\n\n\ndef _bool(value):\n    return _clean(value).lower() in ['true', '1', 'yes', 'y', '是', '需要']\n\n\ndef main(\n    task_type: str = '',\n    original_query: str = '',\n    target_object_json: str = '',\n    need_crm: str = '',\n    need_knowledge: str = '',\n    need_external: str = '',\n    need_attachment: str = '',\n) -> dict:\n    target = _loads(target_object_json, {})\n    object_type = _clean(target.get('object_type') or target.get('objectType'))\n    object_id = _clean(target.get('object_id') or target.get('objectId'))\n    object_name = _clean(target.get('object_name') or target.get('objectName'))\n \
+          \   query = _clean(original_query)\n\n    endpoint = ''\n    payload = {}\n    action = 'none'\n    if _bool(need_crm):\n        if object_type == 'opportunity' and object_id:\n            endpoint = 'get-opportunity-context'\n            action = 'get_opportunity_context'\n            payload = {'opportunityId': object_id, 'limit': 10}\n        elif object_type == 'customer' and object_id:\n            endpoint = 'get-customer-context'\n            action = 'get_customer_context'\n            payload = {'customerId': object_id, 'limit': 10}\n        elif _clean(task_type) == 'stats_analysis':\n            endpoint = 'get-funnel-snapshot'\n            action = 'get_funnel_snapshot'\n            payload = {}\n        elif object_name:\n            search_opportunity = any(word in (object_name + ' ' + query).lower() for word in ['商机', '项目', '机会', '报价', 'deal', 'opportunity'])\n            endpoint = 'search-opportunities' if search_opportunity else 'search-customers'\n          \
+          \  action = 'search_opportunities' if search_opportunity else 'search_customers'\n            payload = {'keyword': object_name, 'limit': 5, 'includeContextOnUnique': True}\n        elif query:\n            endpoint = 'search-customers'\n            action = 'search_customers'\n            payload = {'keyword': query[:80], 'limit': 5, 'includeContextOnUnique': True}\n\n    return {\n        'need_crm': 'true' if endpoint else 'false',\n        'need_knowledge': 'true' if _bool(need_knowledge) else 'false',\n        'need_external': 'true' if _bool(need_external) else 'false',\n        'need_attachment': 'true' if _bool(need_attachment) else 'false',\n        'crm_action': action,\n        'crm_tool_url_path': '/' + endpoint if endpoint else '',\n        'crm_request_body': json.dumps(payload, ensure_ascii=False),\n        'evidence_plan_text': '; '.join([\n            f\"task_type={_clean(task_type)}\",\n            f\"crm={action}\",\n            f\"knowledge={_bool(need_knowledge)}\"\
+          ,\n            f\"external={_bool(need_external)}\",\n            f\"attachment={_bool(need_attachment)}\",\n        ]),\n    }\n"
+        code_language: python3
+        desc: 按任务计划决定 CRM、知识库、外部情报和附件证据是否启用。
+        outputs:
+          crm_action:
+            children: null
+            type: string
+          crm_request_body:
+            children: null
+            type: string
+          crm_tool_url_path:
+            children: null
+            type: string
+          evidence_plan_text:
+            children: null
+            type: string
+          need_attachment:
+            children: null
+            type: string
+          need_crm:
+            children: null
+            type: string
+          need_external:
+            children: null
+            type: string
+          need_knowledge:
+            children: null
+            type: string
+        selected: false
+        title: 证据收集调度
+        type: code
+        variables:
+        - value_selector:
+          - task_plan_normalize
+          - task_type
+          variable: task_type
+        - value_selector:
+          - conversation_context
+          - original_query
+          variable: original_query
+        - value_selector:
+          - task_plan_normalize
+          - target_object_json
+          variable: target_object_json
+        - value_selector:
+          - task_plan_normalize
+          - need_crm
+          variable: need_crm
+        - value_selector:
+          - task_plan_normalize
+          - need_knowledge
+          variable: need_knowledge
+        - value_selector:
+          - task_plan_normalize
+          - need_external
+          variable: need_external
+        - value_selector:
+          - task_plan_normalize
+          - need_attachment
+          variable: need_attachment
+      height: 96
+      id: evidence_router
+      position:
+        x: 3822
+        y: 1239
+      positionAbsolute:
+        x: 3822
+        y: 1239
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+    - data:
+        cases:
+        - case_id: call_crm
+          conditions:
+          - comparison_operator: contains
+            id: cond_crm_read_gate_call_crm
+            value: 'true'
+            varType: string
+            variable_selector:
+            - evidence_router
+            - need_crm
+          id: call_crm
+          logical_operator: and
+        desc: 按需调用 CRM 只读工具。
+        selected: false
+        title: 是否读取 CRM
+        type: if-else
+      height: 176
+      id: crm_read_gate
+      position:
+        x: 4184
+        y: 694.8333333333334
+      positionAbsolute:
+        x: 4184
+        y: 694.8333333333334
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+    - data:
+        authorization:
+          config: null
+          type: no-auth
+        body:
+          data:
+          - type: text
+            value: '{{#evidence_router.crm_request_body#}}'
+          type: json
+        desc: 调用 CordysCRM 只读 Tool API。
+        headers: 'Content-Type: application/json
+
+          X-DIFY-TOOL-TOKEN: {{#env.DIFY_TOOL_TOKEN#}}
+
+          ngrok-skip-browser-warning: true'
+        method: post
+        params: ''
+        retry_config:
+          max_retries: 2
+          retry_enabled: true
+          retry_interval: 300
+        selected: false
+        ssl_verify: true
+        timeout:
+          connect: 10
+          max_connect_timeout: 300
+          max_read_timeout: 600
+          max_write_timeout: 600
+          read: 60
+          write: 20
+        title: CRM 数据读取
+        type: http-request
+        url: '{{#env.CRM_TOOL_BASE_URL#}}{{#evidence_router.crm_tool_url_path#}}'
+        variables: []
+      height: 173
+      id: crm_read_request
+      position:
+        x: 4546
+        y: 628.3333333333334
+      positionAbsolute:
+        x: 4546
+        y: 628.3333333333334
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+    - data:
+        code: "def main() -> dict:\n    return {'output': '{\"success\": true, \"code\": \"SKIPPED\", \"data\": {}, \"message\": \"\"}'}\n"
+        code_language: python3
+        desc: 未启用 CRM 时输出空证据 envelope。
+        outputs:
+          output:
+            children: null
+            type: string
+        selected: false
+        title: CRM 读取跳过响应
+        type: code
+        variables: []
+      height: 80
+      id: crm_read_skip
+      position:
+        x: 4546
+        y: 868.3333333333334
+      positionAbsolute:
+        x: 4546
+        y: 868.3333333333334
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+    - data:
+        desc: 汇合 CRM HTTP 响应或跳过响应。
+        output_type: string
+        selected: false
+        title: CRM 读取结果汇合
+        type: variable-aggregator
+        variables:
+        - - crm_read_request
+          - body
+        - - crm_read_skip
+          - output
+      height: 162
+      id: crm_read_merge
+      position:
+        x: 4908
+        y: 785
+      positionAbsolute:
+        x: 4908
+        y: 785
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+    - data:
+        code: "\nimport json\n\n\ndef _clean(value):\n    if value is None:\n        return ''\n    return str(value).strip()\n\n\ndef _loads(value, fallback):\n    if isinstance(value, (dict, list)):\n        return value\n    text = _clean(value)\n    if not text:\n        return fallback\n    try:\n        return json.loads(text)\n    except Exception:\n        return fallback\n\n\ndef _number(value, default=0):\n    text = _clean(value).replace(',', '').replace('%', '')\n    if not text:\n        return default\n    try:\n        return int(round(float(text)))\n    except Exception:\n        return default\n\n\ndef _single_deal_progress_chart(data):\n    if not isinstance(data, dict):\n        return None\n    opportunity = data.get('opportunity') if isinstance(data.get('opportunity'), dict) else {}\n    facts = data.get('businessFacts') if isinstance(data.get('businessFacts'), dict) else {}\n    if not opportunity:\n        return None\n\n    opportunity_name = (\n        _clean(opportunity.get('name'))\n\
+          \        or _clean(facts.get('opportunityName'))\n        or '当前商机'\n    )\n    stage = _clean(opportunity.get('stage'))\n    stage_name = _clean(opportunity.get('stageName')) or _clean(facts.get('stageName'))\n    win_rate = _number(opportunity.get('possible') or facts.get('winRate'), 0)\n\n    stage_index = -1\n    stage_key = (stage + ' ' + stage_name).lower()\n    if 'success' in stage_key or '赢单' in stage_key or '成交' in stage_key or '签约' in stage_key:\n        stage_index = 4\n    elif 'contract' in stage_key or '合同' in stage_key:\n        stage_index = 3\n    elif 'business_procurement' in stage_key or '商务' in stage_key or '采购' in stage_key:\n        stage_index = 2\n    elif 'solution' in stage_key or '方案' in stage_key or '评审' in stage_key or '验证' in stage_key:\n        stage_index = 1\n    elif 'clear_requirements' in stage_key or '需求' in stage_key:\n        stage_index = 0\n    elif 'create' in stage_key or '新建' in stage_key:\n        stage_index = -1\n\n    stage_names\
+          \ = ['需求确认', '方案评审', '商务沟通', '合同推进']\n    values = []\n    for index, name in enumerate(stage_names):\n        if stage_index >= index:\n            value = 100\n        elif index == max(stage_index + 1, 0):\n            value = win_rate\n        else:\n            value = 0\n        values.append({'name': name, 'value': value})\n    values.append({'name': '赢单预测', 'value': win_rate})\n\n    return {\n        'type': 'funnel',\n        'title': f'{opportunity_name} - 销售推进漏斗',\n        'unit': '%',\n        'data': values,\n    }\n\n\ndef main(response_body: str = '', crm_action: str = '') -> dict:\n    envelope = _loads(response_body, {})\n    facts = []\n    objects = []\n    gaps = []\n    tool_errors = []\n    charts = []\n\n    code = _clean(envelope.get('code'))\n    message = _clean(envelope.get('message'))\n    data = envelope.get('data') if isinstance(envelope.get('data'), dict) else {}\n    candidates = data.get('candidates') if isinstance(data.get('candidates'), list)\
+          \ else []\n    result_type = _clean(data.get('resultType')) or ('candidate_list' if candidates else '')\n    count = data.get('count') if data.get('count') is not None else len(candidates)\n\n    if code == 'SKIPPED' or not envelope:\n        tool_status = 'skipped'\n        gaps.append('本轮未调用 CRM 读取工具。')\n    elif code == 'OK' or (code == 'OBJECT_AMBIGUOUS' and candidates):\n        tool_status = 'ok'\n    else:\n        tool_status = 'error'\n        tool_errors.append(message or f'CRM 工具返回 {code}')\n\n    if data and (tool_status == 'ok' or candidates):\n        facts.append(json.dumps(data, ensure_ascii=False)[:3500])\n        if isinstance(data.get('chart'), dict):\n            charts.append(data.get('chart'))\n        progress_chart = _single_deal_progress_chart(data)\n        if progress_chart:\n            charts.append(progress_chart)\n        if isinstance(data.get('customer'), dict):\n            cust = data.get('customer') or {}\n            objects.append({'objectType':\
+          \ 'customer', 'objectId': _clean(cust.get('id')), 'objectName': _clean(cust.get('name'))})\n        if isinstance(data.get('opportunity'), dict):\n            opp = data.get('opportunity') or {}\n            objects.append({'objectType': 'opportunity', 'objectId': _clean(opp.get('id')), 'objectName': _clean(opp.get('name'))})\n        for item in candidates[:10]:\n            if isinstance(item, dict):\n                object_type = 'opportunity_candidate' if _clean(crm_action) == 'search_opportunities' else 'customer_candidate'\n                objects.append({\n                    'objectType': object_type,\n                    'objectId': _clean(item.get('id')),\n                    'objectName': _clean(item.get('name')),\n                    'customerName': _clean(item.get('customerName')),\n                })\n    elif tool_status != 'skipped' and not tool_errors:\n        gaps.append('CRM 工具未返回可展示数据。')\n\n    evidence = {\n        'source': 'crm',\n        'tool_status':\
+          \ tool_status,\n        'result_type': result_type,\n        'count': count,\n        'candidates': candidates[:10],\n        'facts': facts,\n        'objects': objects,\n        'gaps': gaps,\n        'tool_errors': tool_errors,\n        'action': _clean(crm_action),\n        'charts': charts,\n    }\n    return {'evidence_json': json.dumps(evidence, ensure_ascii=False), 'evidence_text': json.dumps(evidence, ensure_ascii=False)}\n"
+        code_language: python3
+        desc: 把 CRM 工具 envelope 整理为统一证据包。
+        outputs:
+          evidence_json:
+            children: null
+            type: string
+          evidence_text:
+            children: null
+            type: string
+        selected: false
+        title: CRM 证据包整理
+        type: code
+        variables:
+        - value_selector:
+          - crm_read_merge
+          - output
+          variable: response_body
+        - value_selector:
+          - evidence_router
+          - crm_action
+          variable: crm_action
+      height: 96
+      id: crm_evidence
+      position:
+        x: 5592
+        y: 780
+      positionAbsolute:
+        x: 5592
+        y: 780
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+    - data:
+        cases:
+        - case_id: need_knowledge
+          conditions:
+          - comparison_operator: contains
+            id: cond_knowledge_gate_need_knowledge
+            value: 'true'
+            varType: string
+            variable_selector:
+            - evidence_router
+            - need_knowledge
+          id: need_knowledge
+          logical_operator: and
+        desc: 按需召回销售、财务、交付、合同规则。
+        selected: false
+        title: 是否检索知识库
+        type: if-else
+      height: 192
+      id: knowledge_gate
+      position:
+        x: 4184
+        y: 1155.6666666666667
+      positionAbsolute:
+        x: 4184
+        y: 1155.6666666666667
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+    - data:
+        code: "\nimport re\n\n\nMAX_CHARS = 260\nTASK_TERMS = {\n    'full_review': '商机评审 销售 财务 交付 合同 风险 下一步动作',\n    'finance_check': '付款 首付 尾款 账期 回款 折扣 财务风险',\n    'delivery_check': '上线周期 交付范围 资源 验收 交付风险',\n    'legal_check': '合同条款 验收 赔付 责任边界 数据安全',\n    'sales_assist': '销售推进 决策链 客户意向 跟进动作',\n    'followup_plan': '跟进计划 动作 负责人 时间建议',\n    'progress_summary': '商机进展 已确认事实 风险 下一步',\n    'content_draft': '沟通话术 邮件 微信 客户沟通',\n    'stats_analysis': '销售漏斗 阶段转化 赢单率 经营分析',\n}\n\n\ndef _clean(value):\n    if value is None:\n        return ''\n    return re.sub(r'\\s+', ' ', str(value)).strip()\n\n\ndef _shorten(text, limit):\n    text = _clean(text)\n    return text if len(text) <= limit else text[:limit]\n\n\ndef main(original_query: str = '', task_type: str = '', answer_goal: str = '') -> dict:\n    task = _clean(task_type)\n    parts = [\n        _shorten(original_query, 120),\n        TASK_TERMS.get(task, ''),\n        _shorten(answer_goal, 80),\n    ]\n    seen = set()\n    tokens = []\n    for\
+          \ part in parts:\n        for token in re.split(r'[，。；;、\\s]+', part):\n            token = _clean(token)\n            if not token or token in seen:\n                continue\n            seen.add(token)\n            tokens.append(token)\n    query = ' '.join(tokens)\n    return {'text': query[:MAX_CHARS]}\n"
+        code_language: python3
+        desc: 用稳定代码生成短检索串，避免 LLM 改写失控导致知识库查询超长。
+        outputs:
+          text:
+            children: null
+            type: string
+        selected: false
+        title: 规则检索查询改写
+        type: code
+        variables:
+        - value_selector:
+          - conversation_context
+          - original_query
+          variable: original_query
+        - value_selector:
+          - task_plan_normalize
+          - task_type
+          variable: task_type
+        - value_selector:
+          - task_plan_normalize
+          - answer_goal
+          variable: answer_goal
+      height: 96
+      id: query_rewrite
+      position:
+        x: 4546
+        y: 1084.1666666666667
+      positionAbsolute:
+        x: 4546
+        y: 1084.1666666666667
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+    - data:
+        dataset_ids:
+        - BML2bFmj4nFK3/tLcrM6LSpPvsDzIgQCoocG87E31Ba7gh7sTcuWTtCkP/Liubu5
+        desc: 检索 AI Deal Desk 规则知识库。本 YAML 已预置 dataset_ids（BML2bFmj4nFK3/tLcrM6LSpPvsDzIgQCoocG87E31Ba7gh7sTcuWTtCkP/Liubu5），导入后请确认目标 Dify 工作区拥有该知识库；如未拥有或需重绑，请在 Dify 节点中显式绑定“AI Deal Desk 规则知识库 - Dify 单页版”。检索配置建议：混合检索 + Qwen/Qwen3-Reranker-8B + Top K 8 + 关闭 Score 阈值。
+        query_attachment_selector: []
+        query_variable_selector:
+        - query_rewrite
+        - text
+        retrieval_mode: single
+        selected: false
+        single_retrieval_config:
+          model:
+            completion_params: {}
+            mode: chat
+            name: gpt-4o
+            provider: langgenius/openai/openai
+        title: 知识库检索
+        type: knowledge-retrieval
+      height: 278
+      id: deal_rules_knowledge
+      position:
+        x: 4888
+        y: 1109.1666666666667
+      positionAbsolute:
+        x: 4888
+        y: 1109.1666666666667
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+    - data:
+        code: "def main() -> dict:\n    return {'output': '[]'}\n"
+        code_language: python3
+        desc: 未启用知识库时输出空数组。
+        outputs:
+          output:
+            children: null
+            type: string
+        selected: false
+        title: 知识库跳过响应
+        type: code
+        variables: []
+      height: 80
+      id: knowledge_skip
+      position:
+        x: 4888
+        y: 1339.1666666666667
+      positionAbsolute:
+        x: 4888
+        y: 1339.1666666666667
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+    - data:
+        desc: 汇合知识库召回或跳过响应。
+        output_type: string
+        selected: false
+        title: 知识库结果汇合
+        type: variable-aggregator
+        variables:
+        - - deal_rules_knowledge
+          - result
+        - - knowledge_skip
+          - output
+      height: 162
+      id: knowledge_merge
+      position:
+        x: 5250
+        y: 1257.5
+      positionAbsolute:
+        x: 5250
+        y: 1257.5
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+    - data:
+        code: "\nimport json\n\n\ndef _clean(value):\n    if value is None:\n        return ''\n    return str(value).strip()\n\n\ndef _loads(value, fallback):\n    if isinstance(value, (dict, list)):\n        return value\n    text = _clean(value)\n    if not text:\n        return fallback\n    try:\n        return json.loads(text)\n    except Exception:\n        return fallback\n\n\ndef main(knowledge_result=None, skipped: str = '') -> dict:\n    rules = []\n    gaps = []\n    if _clean(skipped):\n        gaps.append('本轮未检索知识库规则。')\n    items = knowledge_result if isinstance(knowledge_result, list) else []\n    for item in items[:8]:\n        if not isinstance(item, dict):\n            continue\n        title = _clean(item.get('title'))\n        content = _clean(item.get('content'))\n        if title or content:\n            rules.append({'title': title, 'content': content[:800], 'url': _clean(item.get('url'))})\n    if not rules and not gaps:\n        gaps.append('未召回直接相关的知识库规则。')\n \
+          \   evidence = {'source': 'knowledge', 'rules': rules, 'gaps': gaps, 'tool_errors': []}\n    return {'evidence_json': json.dumps(evidence, ensure_ascii=False), 'evidence_text': json.dumps(evidence, ensure_ascii=False)}\n"
+        code_language: python3
+        desc: 把召回规则整理为统一证据包。
+        outputs:
+          evidence_json:
+            children: null
+            type: string
+          evidence_text:
+            children: null
+            type: string
+        selected: false
+        title: 知识库证据包整理
+        type: code
+        variables:
+        - value_selector:
+          - deal_rules_knowledge
+          - result
+          variable: knowledge_result
+        - value_selector:
+          - knowledge_skip
+          - output
+          variable: skipped
+      height: 80
+      id: knowledge_evidence
+      position:
+        x: 5592
+        y: 1272.5
+      positionAbsolute:
+        x: 5592
+        y: 1272.5
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+    - data:
+        cases:
+        - case_id: need_external
+          conditions:
+          - comparison_operator: contains
+            id: cond_external_gate_need_external
+            value: 'true'
+            varType: string
+            variable_selector:
+            - evidence_router
+            - need_external
+          id: need_external
+          logical_operator: and
+        desc: 按需调用 Tavily 检索官网、新闻、招投标和公开资料。
+        selected: false
+        title: 是否检索外部情报
+        type: if-else
+      height: 192
+      id: external_gate
+      position:
+        x: 4184
+        y: 1559.5
+      positionAbsolute:
+        x: 4184
+        y: 1559.5
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+    - data:
+        agent_parameters:
+          instruction:
+            type: constant
+            value: '你是 AI Deal Desk 的外部情报检索 Agent，只负责为 CRM 内部判断补充公开信息佐证，不负责最终回答用户，也不写回 CRM。
+
+
+              工具使用原则：
+
+              - 只有当用户问题涉及客户/公司公开背景、官网、新闻、舆情、工商/诉讼/处罚/招投标/资质、行业/竞品/政策、公开风险佐证时才使用联网工具。
+
+              - 普通 CRM 字段查询、商机金额/阶段/负责人/跟进记录、写回确认、图片内容解释、简单概念说明，不要调用联网工具，直接输出空字符串。
+
+              - 如需搜索，优先调用 current_time 获取当前时间，再调用 Tavily Search。默认只搜索 1 次；只有首次结果明显偏题时，才换关键词再搜索 1 次。
+
+              - Tavily Search 返回的 title、url、content 已经足够形成初步判断时，必须直接输出摘要，不要再调用 Tavily Extract。
+
+              - 只有当搜索结果明确相关、但 content 片段不足以判断关键事实时，才调用 Tavily Extract，最多抽取 1 个最相关 URL。调用 Extract 后必须输出最终摘要，不要继续搜索或继续抽取。
+
+              - 不要抓取与当前客户、商机、行业或风险无关的网页；不要为了显得全面而扩大搜索。
+
+
+              输出要求：
+
+              - 如果判断不需要联网，输出空字符串。
+
+              - 如果已经调用 Tavily Search 且返回了 results，不允许输出空字符串；即使结果相关性不高，也要简短说明“未检索到高相关近期公开资料”，并列出最接近但不充分的来源和原因。
+
+              - 如果联网工具返回 tool invoke error、invalid_param、401、403、429、500 或其他错误，不要继续重试同一个搜索；输出一行简短说明：外部检索暂未成功，未获得可验证来源，并保留错误关键词，供后续回答说明检索失败而不是误判为无结果。
+
+              - 如果有可靠资料，输出简短 Markdown，不超过 600 字。
+
+              - 必须区分“公开信息提示”和“CRM 内部事实”；外部资料不能替代 CRM、合同、报价或知识库规则。
+
+              - 保留 1-3 个来源链接，使用普通 Markdown 链接；不要输出工具 payload、原始 JSON、搜索日志、内部推理或调试字段。
+
+              - 输出结构建议：一句外部信息摘要 + 2-4 条可验证要点 + 来源。不要生成完整风险报告。'
+          maximum_iterations:
+            type: constant
+            value: 5
+          model:
+            type: constant
+            value:
+              completion_params:
+                enable_thinking: false
+                temperature: 0.1
+              mode: chat
+              model: kk
+              model_type: llm
+              provider: langgenius/openai_api_compatible/openai_api_compatible
+              type: model-selector
+          query:
+            type: constant
+            value: '用户问题：{{#conversation_context.original_query#}}
+
+              回答目标：{{#task_plan_normalize.answer_goal#}}
+
+              页面上下文：{{#conversation_context.context_text#}}
+
+
+              请只检索与本轮问题有关的公开资料，保留 1-3 个来源链接。'
+          tools:
+            type: constant
+            value:
+            - enabled: true
+              extra:
+                description: 一个用于获取当前时间的工具。
+              parameters: {}
+              plugin_id: null
+              provider_name: time
+              provider_show_name: time
+              settings:
+                format:
+                  value:
+                    type: mixed
+                    value: '%Y-%m-%d %H:%M:%S'
+                timezone:
+                  value:
+                    type: constant
+                    value: Asia/Shanghai
+              tool_description: 一个用于获取当前时间的工具。
+              tool_label: 获取当前时间
+              tool_name: current_time
+              type: builtin
+            - enabled: true
+              extra:
+                description: 专为人工智能代理 (LLM) 构建的搜索引擎工具，可快速提供实时、准确和真实的结果。
+              parameters:
+                country:
+                  auto: 1
+                  value: null
+                end_date:
+                  auto: 1
+                  value: null
+                exclude_domains:
+                  auto: 1
+                  value: null
+                include_domains:
+                  auto: 1
+                  value: null
+                query:
+                  auto: 1
+                  value: null
+                search_depth:
+                  auto: 1
+                  value: null
+                start_date:
+                  auto: 1
+                  value: null
+                time_range:
+                  auto: 1
+                  value: null
+                topic:
+                  auto: 1
+                  value: null
+              plugin_id: langgenius/tavily
+              provider_name: langgenius/tavily/tavily
+              provider_show_name: langgenius/tavily/tavily
+              settings:
+                auto_parameters:
+                  value:
+                    type: constant
+                    value: false
+                chunks_per_source:
+                  value:
+                    type: constant
+                    value: 3
+                include_answer:
+                  value:
+                    type: constant
+                    value: 'false'
+                include_favicon:
+                  value:
+                    type: constant
+                    value: false
+                include_image_descriptions:
+                  value:
+                    type: constant
+                    value: false
+                include_images:
+                  value:
+                    type: constant
+                    value: false
+                include_raw_content:
+                  value:
+                    type: constant
+                    value: 'false'
+                include_usage:
+                  value:
+                    type: constant
+                    value: false
+                max_results:
+                  value:
+                    type: constant
+                    value: 5
+                project_id:
+                  value:
+                    type: mixed
+                    value: null
+              tool_description: 专为人工智能代理 (LLM) 构建的搜索引擎工具，可快速提供实时、准确和真实的结果。
+              tool_label: Tavily Search
+              tool_name: tavily_search
+              type: builtin
+            - enabled: true
+              extra:
+                description: 使用 Tavily Extract 从一个或多个指定的 URL 提取网页内容。
+              parameters:
+                extract_depth:
+                  auto: 1
+                  value: null
+                query:
+                  auto: 1
+                  value: null
+                urls:
+                  auto: 1
+                  value: null
+              plugin_id: langgenius/tavily
+              provider_name: langgenius/tavily/tavily
+              provider_show_name: langgenius/tavily/tavily
+              settings:
+                chunks_per_source:
+                  value:
+                    type: constant
+                    value: 3
+                format:
+                  value:
+                    type: constant
+                    value: markdown
+                include_favicon:
+                  value:
+                    type: constant
+                    value: false
+                include_images:
+                  value:
+                    type: constant
+                    value: false
+                include_usage:
+                  value:
+                    type: constant
+                    value: false
+                project_id:
+                  value:
+                    type: mixed
+                    value: null
+                timeout:
+                  value:
+                    type: constant
+                    value: null
+              tool_description: 使用 Tavily Extract 从一个或多个指定的 URL 提取网页内容。
+              tool_label: Tavily Extract
+              tool_name: tavily_extract
+              type: builtin
+        agent_strategy_label: FunctionCalling
+        agent_strategy_name: function_calling
+        agent_strategy_provider_name: langgenius/agent/agent
+        desc: FunctionCalling Agent。仅在门控命中后运行，按需调用 current_time / Tavily Search / Tavily Extract，为 CRM 判断补充公开信息佐证。
+        meta:
+          minimum_dify_version: 1.7.0
+          version: 0.0.2
+        output_schema: {}
+        plugin_unique_identifier: langgenius/agent:0.0.40@d00a70e81bfb28fadd52cba7fd7a1f7c344c67b051e4a2e356a06c690736a7c4
+        selected: false
+        title: 外部情报检索 Agent
+        tool_node_version: '2'
+        type: agent
+      height: 264
+      id: external_intel_agent
+      position:
+        x: 4546
+        y: 1485.5
+      positionAbsolute:
+        x: 4546
+        y: 1485.5
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+    - data:
+        code: "def main() -> dict:\n    return {'output': ''}\n"
+        code_language: python3
+        desc: 未启用外部情报时输出空字符串。
+        outputs:
+          output:
+            children: null
+            type: string
+        selected: false
+        title: 外部情报跳过响应
+        type: code
+        variables: []
+      height: 80
+      id: external_skip
+      position:
+        x: 4546
+        y: 1735.5
+      positionAbsolute:
+        x: 4546
+        y: 1735.5
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+    - data:
+        desc: 汇合 Tavily Agent 输出或跳过响应。
+        output_type: string
+        selected: false
+        title: 外部情报结果汇合
+        type: variable-aggregator
+        variables:
+        - - external_intel_agent
+          - text
+        - - external_skip
+          - output
+      height: 162
+      id: external_merge
+      position:
+        x: 4908
+        y: 1650.5
+      positionAbsolute:
+        x: 4908
+        y: 1650.5
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+    - data:
+        code: "\nimport json\nimport re\n\n\ndef _clean(value):\n    if value is None:\n        return ''\n    return str(value).strip()\n\n\ndef main(external_text: str = '') -> dict:\n    text = _clean(external_text)\n    sources = []\n    for match in re.finditer(r'\\[([^\\]]+)\\]\\((https?://[^)]+)\\)', text):\n        sources.append({'title': match.group(1), 'url': match.group(2)})\n    gaps = [] if text else ['本轮未获取外部公开资料。']\n    facts = [text] if text else []\n    evidence = {'source': 'external', 'facts': facts, 'sources': sources[:5], 'gaps': gaps, 'tool_errors': []}\n    return {'evidence_json': json.dumps(evidence, ensure_ascii=False), 'evidence_text': json.dumps(evidence, ensure_ascii=False)}\n"
+        code_language: python3
+        desc: 提取公开资料摘要和来源链接。
+        outputs:
+          evidence_json:
+            children: null
+            type: string
+          evidence_text:
+            children: null
+            type: string
+        selected: false
+        title: 外部情报证据包整理
+        type: code
+        variables:
+        - value_selector:
+          - external_merge
+          - output
+          variable: external_text
+      height: 80
+      id: external_evidence
+      position:
+        x: 5592
+        y: 1665.5
+      positionAbsolute:
+        x: 5592
+        y: 1665.5
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+    - data:
+        code: "\nimport json\n\n\ndef _clean(value):\n    if value is None:\n        return ''\n    return str(value).strip()\n\n\ndef main(attachment_names: str = '', attachments_summary: str = '') -> dict:\n    facts = []\n    gaps = []\n    if _clean(attachments_summary):\n        facts.append(f\"附件/图片摘要：{_clean(attachments_summary)}\")\n    else:\n        gaps.append('本轮没有可用附件摘要。')\n    evidence = {'source': 'attachment', 'facts': facts, 'gaps': gaps, 'tool_errors': [], 'attachment_names': _clean(attachment_names)}\n    return {'evidence_json': json.dumps(evidence, ensure_ascii=False), 'evidence_text': json.dumps(evidence, ensure_ascii=False)}\n"
+        code_language: python3
+        desc: 把图片/附件摘要整理为统一证据包。
+        outputs:
+          evidence_json:
+            children: null
+            type: string
+          evidence_text:
+            children: null
+            type: string
+        selected: false
+        title: 附件内容整理
+        type: code
+        variables:
+        - value_selector:
+          - input_parse
+          - attachment_names
+          variable: attachment_names
+        - value_selector:
+          - input_parse
+          - attachments_summary
+          variable: attachments_summary
+      height: 80
+      id: attachment_evidence
+      position:
+        x: 4184
+        y: 1928.8333333333335
+      positionAbsolute:
+        x: 4184
+        y: 1928.8333333333335
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+    - data:
+        code: "\nimport json\n\n\ndef _clean(value):\n    if value is None:\n        return ''\n    return str(value).strip()\n\n\ndef _loads(value, fallback):\n    if isinstance(value, (dict, list)):\n        return value\n    text = _clean(value)\n    if not text:\n        return fallback\n    try:\n        return json.loads(text)\n    except Exception:\n        return fallback\n\n\ndef _number(value, default=0):\n    try:\n        return int(round(float(str(value).replace(',', '').replace('%', '').strip())))\n    except Exception:\n        return default\n\n\ndef _valid_chart(chart):\n    if not isinstance(chart, dict):\n        return None\n    chart_type = _clean(chart.get('type') or chart.get('chartType'))\n    if chart_type not in ['bar', 'line', 'pie', 'donut', 'funnel']:\n        return None\n    data = chart.get('data')\n    if not isinstance(data, list) or not data:\n        return None\n    safe_data = []\n    for item in data:\n        if not isinstance(item, dict):\n      \
+          \      continue\n        name = _clean(item.get('name'))\n        if not name:\n            continue\n        safe_data.append({'name': name[:40], 'value': _number(item.get('value'), 0)})\n    if not safe_data:\n        return None\n    return {\n        'type': chart_type,\n        'title': _clean(chart.get('title'))[:80],\n        'unit': _clean(chart.get('unit'))[:12],\n        'data': safe_data,\n    }\n\n\ndef _chart_fence(chart):\n    safe_chart = _valid_chart(chart)\n    if not safe_chart:\n        return ''\n    return '```chart\\n' + json.dumps(safe_chart, ensure_ascii=False, separators=(',', ':')) + '\\n```'\n\n\ndef main(\n    crm_evidence_json: str = '',\n    knowledge_evidence_json: str = '',\n    external_evidence_json: str = '',\n    attachment_evidence_json: str = '',\n    target_object_json: str = '',\n    answer_goal: str = '',\n    success_criteria_json: str = '',\n) -> dict:\n    evidences = [\n        _loads(crm_evidence_json, {}),\n        _loads(knowledge_evidence_json,\
+          \ {}),\n        _loads(external_evidence_json, {}),\n        _loads(attachment_evidence_json, {}),\n    ]\n    facts, sources, rules, gaps, errors, objects, charts = [], [], [], [], [], [], []\n    for evidence in evidences:\n        if not isinstance(evidence, dict):\n            continue\n        facts.extend(evidence.get('facts') or [])\n        sources.extend(evidence.get('sources') or [])\n        rules.extend(evidence.get('rules') or [])\n        gaps.extend(evidence.get('gaps') or [])\n        errors.extend(evidence.get('tool_errors') or [])\n        objects.extend(evidence.get('objects') or [])\n        charts.extend(evidence.get('charts') or [])\n\n    target = _loads(target_object_json, {})\n    if not target and objects:\n        target = objects[0]\n    chart_blocks = [_chart_fence(chart) for chart in charts[:3]]\n    chart_blocks_text = '\\n\\n'.join(block for block in chart_blocks if block)\n\n    ledger = {\n        'answer_goal': _clean(answer_goal),\n        'target_object':\
+          \ target if isinstance(target, dict) else {},\n        'facts': facts,\n        'sources': sources,\n        'rules': rules,\n        'gaps': gaps,\n        'tool_errors': errors,\n        'charts': charts,\n        'chart_blocks_text': chart_blocks_text,\n        'success_criteria': _loads(success_criteria_json, []),\n    }\n    ledger_text = '\\n'.join([\n        f\"回答目标：{_clean(answer_goal) or '未明确'}\",\n        f\"目标对象：{json.dumps(ledger['target_object'], ensure_ascii=False)}\",\n        \"CRM/公开/附件事实：\\n\" + ('\\n'.join(f\"- {item}\" for item in facts[:10]) or \"- 无\"),\n        \"规则依据：\\n\" + ('\\n'.join(f\"- {item.get('title')}: {item.get('content')}\" for item in rules[:5] if isinstance(item, dict)) or \"- 无\"),\n        \"来源链接：\\n\" + ('\\n'.join(f\"- {item.get('title')}: {item.get('url')}\" for item in sources[:5] if isinstance(item, dict)) or \"- 无\"),\n        \"缺失信息：\\n\" + ('\\n'.join(f\"- {item}\" for item in gaps[:8]) or \"- 无\"),\n        \"工具错误：\\n\" + ('\\n'.join(f\"\
+          - {item}\" for item in errors[:5]) or \"- 无\"),\n    ])\n    ledger['ledger_text'] = ledger_text\n    return {\n        'ledger_json': json.dumps(ledger, ensure_ascii=False),\n        'ledger_text': ledger_text,\n        'target_object_json': json.dumps(ledger['target_object'], ensure_ascii=False),\n        'chart_blocks_text': chart_blocks_text,\n    }\n"
+        code_language: python3
+        desc: 汇总 CRM 事实、规则依据、外部信息、附件内容、缺失信息和工具错误。
+        outputs:
+          chart_blocks_text:
+            children: null
+            type: string
+          ledger_json:
+            children: null
+            type: string
+          ledger_text:
+            children: null
+            type: string
+          target_object_json:
+            children: null
+            type: string
+        selected: false
+        title: 证据汇总
+        type: code
+        variables:
+        - value_selector:
+          - crm_evidence
+          - evidence_json
+          variable: crm_evidence_json
+        - value_selector:
+          - knowledge_evidence
+          - evidence_json
+          variable: knowledge_evidence_json
+        - value_selector:
+          - external_evidence
+          - evidence_json
+          variable: external_evidence_json
+        - value_selector:
+          - attachment_evidence
+          - evidence_json
+          variable: attachment_evidence_json
+        - value_selector:
+          - task_plan_normalize
+          - target_object_json
+          variable: target_object_json
+        - value_selector:
+          - task_plan_normalize
+          - answer_goal
+          variable: answer_goal
+        - value_selector:
+          - task_plan_normalize
+          - success_criteria_json
+          variable: success_criteria_json
+      height: 96
+      id: evidence_ledger
+      position:
+        x: 5954
+        y: 1383.2670807453414
+      positionAbsolute:
+        x: 5954
+        y: 1383.2670807453414
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+    - data:
+        code: "\nimport json\n\n\ndef _clean(value):\n    if value is None:\n        return ''\n    return str(value).strip()\n\n\ndef _loads(value, fallback):\n    if isinstance(value, (dict, list)):\n        return value\n    text = _clean(value)\n    if not text:\n        return fallback\n    try:\n        return json.loads(text)\n    except Exception:\n        return fallback\n\n\ndef main(task_type: str = '', target_object_json: str = '', original_query: str = '') -> dict:\n    target = _loads(target_object_json, {})\n    requires_object = _clean(task_type) in [\n        'object_query', 'progress_summary', 'sales_assist', 'finance_check',\n        'delivery_check', 'legal_check', 'full_review', 'content_draft',\n        'followup_plan', 'external_research',\n    ]\n    query = _clean(original_query)\n    has_target = bool(target and (_clean(target.get('objectId')) or _clean(target.get('object_id')) or _clean(target.get('objectName')) or _clean(target.get('object_name'))))\n    if requires_object\
+          \ and not has_target and any(word in query for word in ['当前商机', '这个商机', '当前客户', '这个客户']):\n        answer = '我需要先知道你指的是哪个客户或商机。请在当前页面绑定对象，或直接告诉我客户/商机名称。'\n        return {'gap_status': 'need_clarification', 'gap_answer': answer, 'reason': 'missing_target_object'}\n    return {'gap_status': 'answerable', 'gap_answer': '', 'reason': ''}\n"
+        code_language: python3
+        desc: 只有目标对象或必要输入完全缺失时追问，否则继续回答。
+        outputs:
+          gap_answer:
+            children: null
+            type: string
+          gap_status:
+            children: null
+            type: string
+          reason:
+            children: null
+            type: string
+        selected: false
+        title: 证据完整度判断
+        type: code
+        variables:
+        - value_selector:
+          - task_plan_normalize
+          - task_type
+          variable: task_type
+        - value_selector:
+          - evidence_ledger
+          - target_object_json
+          variable: target_object_json
+        - value_selector:
+          - conversation_context
+          - original_query
+          variable: original_query
+      height: 96
+      id: gap_check
+      position:
+        x: 6296
+        y: 1444.9337474120082
+      positionAbsolute:
+        x: 6296
+        y: 1444.9337474120082
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+    - data:
+        cases:
+        - case_id: need_clarification
+          conditions:
+          - comparison_operator: contains
+            id: cond_gap_check_gate_need_clarification
+            value: need_clarification
+            varType: string
+            variable_selector:
+            - gap_check
+            - gap_status
+          id: need_clarification
+          logical_operator: and
+        - case_id: answerable
+          conditions:
+          - comparison_operator: contains
+            id: cond_gap_check_gate_answerable
+            value: answerable
+            varType: string
+            variable_selector:
+            - gap_check
+            - gap_status
+          id: answerable
+          logical_operator: and
+        desc: 缺关键对象时输出缺口回答，否则进入业务 Agent 路由。
+        selected: false
+        title: 缺口路由
+        type: if-else
+      height: 264
+      id: gap_check_gate
+      position:
+        x: 6638
+        y: 1441.600414078675
+      positionAbsolute:
+        x: 6638
+        y: 1441.600414078675
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+    - data:
+        code: "\ndef _clean(value):\n    if value is None:\n        return ''\n    return str(value).strip()\n\n\ndef main(gap_answer: str = '') -> dict:\n    return {'answer_text': _clean(gap_answer) or '我还需要更多信息才能继续，请补充客户、商机或你希望分析的具体内容。'}\n"
+        code_language: python3
+        desc: 说明缺什么，等待用户补充。
+        outputs:
+          answer_text:
+            children: null
+            type: string
+        selected: false
+        title: 缺口回答
+        type: code
+        variables:
+        - value_selector:
+          - gap_check
+          - gap_answer
+          variable: gap_answer
+      height: 80
+      id: gap_answer
+      position:
+        x: 7000
+        y: 514.2422360248447
+      positionAbsolute:
+        x: 7000
+        y: 514.2422360248447
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+    - data:
+        cases:
+        - case_id: full_review
+          conditions:
+          - comparison_operator: contains
+            id: cond_agent_router_full_review
+            value: full_review
+            varType: string
+            variable_selector:
+            - task_plan_normalize
+            - agent_route
+          id: full_review
+          logical_operator: and
+        - case_id: sales
+          conditions:
+          - comparison_operator: contains
+            id: cond_agent_router_sales
+            value: sales
+            varType: string
+            variable_selector:
+            - task_plan_normalize
+            - agent_route
+          id: sales
+          logical_operator: and
+        - case_id: finance
+          conditions:
+          - comparison_operator: contains
+            id: cond_agent_router_finance
+            value: finance
+            varType: string
+            variable_selector:
+            - task_plan_normalize
+            - agent_route
+          id: finance
+          logical_operator: and
+        - case_id: delivery
+          conditions:
+          - comparison_operator: contains
+            id: cond_agent_router_delivery
+            value: delivery
+            varType: string
+            variable_selector:
+            - task_plan_normalize
+            - agent_route
+          id: delivery
+          logical_operator: and
+        - case_id: legal
+          conditions:
+          - comparison_operator: contains
+            id: cond_agent_router_legal
+            value: legal
+            varType: string
+            variable_selector:
+            - task_plan_normalize
+            - agent_route
+          id: legal
+          logical_operator: and
+        - case_id: analytics
+          conditions:
+          - comparison_operator: contains
+            id: cond_agent_router_analytics
+            value: analytics
+            varType: string
+            variable_selector:
+            - task_plan_normalize
+            - agent_route
+          id: analytics
+          logical_operator: and
+        - case_id: crm_light_answer
+          conditions:
+          - comparison_operator: contains
+            id: cond_agent_router_crm_light_answer
+            value: crm_light_answer
+            varType: string
+            variable_selector:
+            - task_plan_normalize
+            - agent_route
+          id: crm_light_answer
+          logical_operator: and
+        - case_id: no_domain_agent
+          conditions:
+          - comparison_operator: contains
+            id: cond_agent_router_no_domain_agent
+            value: none
+            varType: string
+            variable_selector:
+            - task_plan_normalize
+            - agent_route
+          id: no_domain_agent
+          logical_operator: and
+        desc: 按需选择 CRM 轻量读取回答或领域 Agent。
+        selected: false
+        title: 回答路径与业务 Agent 路由
+        type: if-else
+        height: 696
+      height: 608
+      id: agent_router
+      position:
+        x: 7000
+        y: 1370.1718426501034
+      positionAbsolute:
+        x: 7000
+        y: 1370.1718426501034
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+    - data:
+        context:
+          enabled: false
+          variable_selector: []
+        desc: 从销售视角判断商机质量和推进策略。
+        memory:
+          query_prompt_template: ''
+          role_prefix:
+            assistant: ''
+            user: ''
+          window:
+            enabled: false
+            size: 5
+        model:
+          completion_params:
+            enable_thinking: false
+          mode: chat
+          name: kk
+          provider: langgenius/openai_api_compatible/openai_api_compatible
+        prompt_template:
+        - id: sales_agent-system
+          role: system
+          text: '你是销售协同 Agent，只从销售推进、客户意向、决策链、跟进动作角度判断。基于证据台账输出固定字段：domain, verdict, risk_level, key_evidence, risks, missing, actions。
+
+
+            证据台账：
+
+            {{#evidence_ledger.ledger_text#}}
+
+
+            回答目标：{{#task_plan_normalize.answer_goal#}}'
+        selected: false
+        title: 销售协同 Agent
+        type: llm
+        variables: []
+        vision:
+          enabled: false
+      height: 116
+      id: sales_agent
+      position:
+        x: 7362
+        y: 700.0993788819875
+      positionAbsolute:
+        x: 7362
+        y: 700.0993788819875
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+    - data:
+        context:
+          enabled: false
+          variable_selector: []
+        desc: 从财务和商务视角判断折扣、付款、回款风险。
+        memory:
+          query_prompt_template: ''
+          role_prefix:
+            assistant: ''
+            user: ''
+          window:
+            enabled: false
+            size: 5
+        model:
+          completion_params:
+            enable_thinking: false
+          mode: chat
+          name: kk
+          provider: langgenius/openai_api_compatible/openai_api_compatible
+        prompt_template:
+        - id: finance_agent-system
+          role: system
+          text: '你是财务判断 Agent，只从折扣、付款、账期、回款风险角度判断。基于证据台账输出固定字段：domain, verdict, risk_level, key_evidence, risks, missing, actions。
+
+
+            证据台账：
+
+            {{#evidence_ledger.ledger_text#}}
+
+
+            回答目标：{{#task_plan_normalize.answer_goal#}}'
+        selected: false
+        title: 财务判断 Agent
+        type: llm
+        variables: []
+        vision:
+          enabled: false
+      height: 132
+      id: finance_agent
+      position:
+        x: 7362
+        y: 930.0993788819875
+      positionAbsolute:
+        x: 7362
+        y: 930.0993788819875
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+    - data:
+        context:
+          enabled: false
+          variable_selector: []
+        desc: 从实施交付视角判断上线周期、定制范围和资源风险。
+        memory:
+          query_prompt_template: ''
+          role_prefix:
+            assistant: ''
+            user: ''
+          window:
+            enabled: false
+            size: 5
+        model:
+          completion_params:
+            enable_thinking: false
+          mode: chat
+          name: kk
+          provider: langgenius/openai_api_compatible/openai_api_compatible
+        prompt_template:
+        - id: delivery_agent-system
+          role: system
+          text: '你是交付判断 Agent，只从上线周期、交付范围、资源、集成、验收准备角度判断。基于证据台账输出固定字段：domain, verdict, risk_level, key_evidence, risks, missing, actions。
+
+
+            证据台账：
+
+            {{#evidence_ledger.ledger_text#}}
+
+
+            回答目标：{{#task_plan_normalize.answer_goal#}}'
+        selected: false
+        title: 交付判断 Agent
+        type: llm
+        variables: []
+        vision:
+          enabled: false
+      height: 132
+      id: delivery_agent
+      position:
+        x: 7362
+        y: 1161.2480772369843
+      positionAbsolute:
+        x: 7362
+        y: 1161.2480772369843
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+    - data:
+        context:
+          enabled: false
+          variable_selector: []
+        desc: 从合同和法务视角判断特殊条款、验收、赔付和责任边界。
+        memory:
+          query_prompt_template: ''
+          role_prefix:
+            assistant: ''
+            user: ''
+          window:
+            enabled: false
+            size: 5
+        model:
+          completion_params:
+            enable_thinking: false
+          mode: chat
+          name: kk
+          provider: langgenius/openai_api_compatible/openai_api_compatible
+        prompt_template:
+        - id: legal_agent-system
+          role: system
+          text: '你是合同判断 Agent，只从验收、赔付、责任边界、数据安全、特殊承诺角度判断。基于证据台账输出固定字段：domain, verdict, risk_level, key_evidence, risks, missing, actions。
+
+
+            证据台账：
+
+            {{#evidence_ledger.ledger_text#}}
+
+
+            回答目标：{{#task_plan_normalize.answer_goal#}}'
+        selected: false
+        title: 合同判断 Agent
+        type: llm
+        variables: []
+        vision:
+          enabled: false
+      height: 132
+      id: legal_agent
+      position:
+        x: 7362
+        y: 1393.5454739469787
+      positionAbsolute:
+        x: 7362
+        y: 1393.5454739469787
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+    - data:
+        context:
+          enabled: false
+          variable_selector: []
+        desc: 处理 CRM 查询摘要、商机总结、内容生成、跟进计划、写回确认和写回结果。
+        memory:
+          query_prompt_template: ''
+          role_prefix:
+            assistant: ''
+            user: ''
+          window:
+            enabled: true
+            size: 5
+        model:
+          completion_params:
+            enable_thinking: false
+            max_tokens: 1500
+            temperature: 0.3
+          mode: chat
+          name: kk
+          provider: langgenius/openai_api_compatible/openai_api_compatible
+        prompt_template:
+        - id: analytics-agent-system
+          role: system
+          text: '你是经营分析 Agent，只从漏斗、转化、赢单、收入、回款、阶段卡点角度判断。基于证据台账输出固定字段：domain, verdict, risk_level, key_evidence, risks, missing, actions。
+
+
+            证据台账：
+
+            {{#evidence_ledger.ledger_text#}}
+
+
+            回答目标：{{#task_plan_normalize.answer_goal#}}'
+        selected: false
+        title: 经营分析 Agent
+        type: llm
+        variables: []
+        vision:
+          enabled: false
+      height: 148
+      id: analytics_agent
+      position:
+        x: 7362
+        y: 1629.2889657219637
+      positionAbsolute:
+        x: 7362
+        y: 1629.2889657219637
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+    - data:
+        code: "def main() -> dict:\n    return {'output': '本轮不需要单独的销售、财务、交付、合同或经营分析 Agent，直接基于证据台账生成回答。'}\n"
+        code_language: python3
+        desc: 无需领域 Agent 时输出占位结论，保证 CRM 业务回答始终经过领域结论汇总。
+        outputs:
+          output:
+            children: null
+            type: string
+        selected: false
+        title: 无需领域 Agent
+        type: code
+        variables: []
+      height: 96
+      id: agent_skip
+      position:
+        x: 7362
+        y: 1850.0993788819874
+      positionAbsolute:
+        x: 7362
+        y: 1850.0993788819874
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+    - data:
+        desc: 汇总销售、财务、交付、合同和经营分析 Agent 结论。
+        output_type: string
+        selected: false
+        title: 领域结论汇总
+        type: variable-aggregator
+        variables:
+        - - sales_agent
+          - text
+        - - finance_agent
+          - text
+        - - delivery_agent
+          - text
+        - - legal_agent
+          - text
+        - - analytics_agent
+          - text
+        - - agent_skip
+          - output
+      height: 282
+      id: agent_merge
+      position:
+        x: 7724
+        y: 1324.3136645962732
+      positionAbsolute:
+        x: 7724
+        y: 1324.3136645962732
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+    - data:
+        context:
+          enabled: false
+          variable_selector: []
+        desc: 统一生成 CRM 业务回答、判断、建议、沟通草稿或跟进计划。
+        memory:
+          query_prompt_template: ''
+          role_prefix:
+            assistant: ''
+            user: ''
+          window:
+            enabled: true
+            size: 5
+        model:
+          completion_params:
+            enable_thinking: false
+            max_tokens: 1500
+            reasoning_format: auto
+            temperature: 0.3
+          mode: chat
+          name: gpt-5.5
+          provider: langgenius/openai_api_compatible/openai_api_compatible
+        prompt_template:
+        - id: business-answer-system
+          role: system
+          text: '你是 AI Deal Desk 的 CRM 业务回答生成器。你不直接调用工具，只基于 Planner、证据台账和领域 Agent 结论生成给销售看的回答。
+
+
+            回答要求：
+
+            - 先给结论，再给依据。
+
+            - 能回答多少回答多少，缺什么说清楚。
+
+            - 不暴露节点名、路由名、工具 payload、JSON 字段。
+
+            - 如果用户要求草稿、邮件、话术或跟进计划，直接给可复制内容。
+
+            - 如果用户要求保存或写入 CRM，说明当前版本只生成内容，不执行写入。
+
+            - 不声称已审批、已写回、已完成 CRM 操作。
+
+            - 如果用户明确要求画图、图表、漏斗图或可视化，禁止用 ASCII 图、Mermaid 或 text 代码块模拟图表；只输出业务解释，图表由系统 chart fence 承载。
+
+            - 输出标准 Markdown，保持简洁、业务可用。
+
+
+            用户问题：{{#conversation_context.original_query#}}
+
+            回答目标：{{#task_plan_normalize.answer_goal#}}
+
+            成功标准：{{#task_plan_normalize.success_criteria_json#}}
+
+
+            证据台账：
+
+            {{#evidence_ledger.ledger_text#}}
+
+
+            领域 Agent 结论：
+
+            {{#agent_merge.output#}}
+
+            '
+        selected: false
+        title: CRM 业务回答生成
+        type: llm
+        variables: []
+        vision:
+          enabled: false
+      height: 132
+      id: business_answer_agent
+      position:
+        x: 8066
+        y: 1327.6469979296066
+      positionAbsolute:
+        x: 8066
+        y: 1327.6469979296066
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+    - data:
+        code: "\nimport json\nimport re\n\n\ndef _clean(value):\n    if value is None:\n        return ''\n    return str(value).strip()\n\n\ndef _strip_think(text):\n    return re.sub(r'<think>.*?</think>', '', _clean(text), flags=re.S).strip()\n\n\ndef _loads(value, fallback):\n    if isinstance(value, (dict, list)):\n        return value\n    text = _clean(value)\n    if not text:\n        return fallback\n    try:\n        return json.loads(text)\n    except Exception:\n        return fallback\n\n\ndef _expects_chart(query):\n    text = _clean(query).lower()\n    return any(word in text for word in [\n        '图表', '图形', '画图', '可视化', '漏斗图', '漏斗', '柱状图', '折线图', '饼图',\n        'chart', 'funnel', 'bar chart', 'visualize',\n    ])\n\n\ndef _remove_plain_chart_fences(answer):\n    text = _clean(answer)\n    pattern = r'```(?:text|txt|plain)?\\s*\\n(?=[\\s\\S]{0,1200}(?:漏斗|需求确认|方案评审|商务沟通|合同推进|赢单预测))[\\s\\S]*?```'\n    return re.sub(pattern, '', text, flags=re.I).strip()\n\n\ndef _turn_type(task_type):\n\
+          \    mapping = {\n        'general_chat': 'quick_answer',\n        'image_answer': 'quick_answer',\n        'object_query': 'object_select',\n        'progress_summary': 'text_analysis',\n        'sales_assist': 'text_analysis',\n        'finance_check': 'text_analysis',\n        'delivery_check': 'text_analysis',\n        'legal_check': 'text_analysis',\n        'full_review': 'deep_deal_review_brief',\n        'stats_analysis': 'stats_query',\n        'content_draft': 'text_analysis',\n        'followup_plan': 'text_analysis',\n        'external_research': 'text_analysis',\n    }\n    return mapping.get(_clean(task_type), 'text_analysis')\n\n\ndef main(\n    simple_answer: str = '',\n    image_answer: str = '',\n    gap_answer: str = '',\n    crm_light_answer: str = '',\n    business_answer: str = '',\n    task_type: str = '',\n    target_object_json: str = '',\n    original_query: str = '',\n    chart_blocks_text: str = '',\n) -> dict:\n    answer = _strip_think(business_answer)\
+          \ or _strip_think(crm_light_answer) or _strip_think(gap_answer) or _strip_think(image_answer) or _strip_think(simple_answer)\n    if not answer:\n        answer = '我还没有拿到足够信息来回答这个问题。请补充客户、商机或你希望我分析的具体内容。'\n    chart_blocks = _clean(chart_blocks_text)\n    if _expects_chart(original_query) and chart_blocks:\n        answer = _remove_plain_chart_fences(answer)\n        if '```chart' not in answer:\n            answer = (answer.rstrip() + '\\n\\n' + chart_blocks).strip()\n    bound = _loads(target_object_json, {})\n    payload = {\n        'protocolVersion': '1.0',\n        'turnType': _turn_type(task_type),\n        'answerText': answer,\n        'processEvents': [],\n        'writeback': {},\n        'boundObject': bound if isinstance(bound, dict) else {},\n    }\n    return {'protocol_answer': json.dumps(payload, ensure_ascii=False)}\n"
+        code_language: python3
+        desc: 补齐协议字段并做基础格式修正。
+        outputs:
+          protocol_answer:
+            children: null
+            type: string
+        selected: false
+        title: 输出协议适配
+        type: code
+        variables:
+        - value_selector:
+          - simple_answer
+          - text
+          variable: simple_answer
+        - value_selector:
+          - image_answer
+          - text
+          variable: image_answer
+        - value_selector:
+          - gap_answer
+          - answer_text
+          variable: gap_answer
+        - value_selector:
+          - crm_light_answer
+          - answer_text
+          variable: crm_light_answer
+        - value_selector:
+          - business_answer_agent
+          - text
+          variable: business_answer
+        - value_selector:
+          - task_plan_normalize
+          - task_type
+          variable: task_type
+        - value_selector:
+          - evidence_ledger
+          - target_object_json
+          variable: target_object_json
+        - value_selector:
+          - conversation_context
+          - original_query
+          variable: original_query
+        - value_selector:
+          - evidence_ledger
+          - chart_blocks_text
+          variable: chart_blocks_text
+      height: 80
+      id: protocol_adapter
+      position:
+        x: 8428
+        y: 542.5
+      positionAbsolute:
+        x: 8428
+        y: 542.5
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+    - data:
+        answer: '{{#protocol_adapter.protocol_answer#}}'
+        desc: 统一协议 JSON 最终输出。
+        selected: false
+        title: 输出到 CRM 工作台
+        type: answer
+        variables:
+        - value_selector:
+          - protocol_adapter
+          - protocol_answer
+          variable: protocol_answer
+      height: 131
+      id: final_answer
+      position:
+        x: 8770
+        y: 600.8333333333334
+      positionAbsolute:
+        x: 8770
+        y: 600.8333333333334
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+    - data:
+        code: "\nimport json\nimport re\nfrom datetime import datetime, timezone, timedelta\n\n\ndef _clean(value):\n    if value is None:\n        return ''\n    return str(value).strip()\n\n\ndef _loads(value, fallback):\n    if isinstance(value, (dict, list)):\n        return value\n    text = _clean(value)\n    if not text:\n        return fallback\n    try:\n        return json.loads(text)\n    except Exception:\n        return fallback\n\n\ndef _first_data(evidence):\n    facts = evidence.get('facts') if isinstance(evidence.get('facts'), list) else []\n    for item in facts:\n        parsed = _loads(item, {})\n        if isinstance(parsed, dict) and parsed:\n            return parsed\n    return {}\n\n\ndef _fmt(value, empty='-'):\n    text = _clean(value)\n    return text if text else empty\n\n\ndef _money(value):\n    text = _clean(value)\n    if not text:\n        return '-'\n    try:\n        number = float(text.replace(',', ''))\n        if number.is_integer():\n            return\
+          \ f'{int(number):,}'\n        return f'{number:,.2f}'\n    except Exception:\n        return text\n\n\ndef _percent(value):\n    text = _clean(value)\n    if not text:\n        return '-'\n    return text if text.endswith('%') else f'{text}%'\n\n\ndef _date(value):\n    text = _clean(value)\n    if not text:\n        return '-'\n    try:\n        number = int(float(text))\n        if number > 100000000000:\n            dt = datetime.fromtimestamp(number / 1000, tz=timezone(timedelta(hours=8)))\n            return dt.strftime('%Y-%m-%d')\n    except Exception:\n        pass\n    return text\n\n\ndef _md_table(headers, rows):\n    lines = [\n        '| ' + ' | '.join(headers) + ' |',\n        '| ' + ' | '.join(['---'] * len(headers)) + ' |',\n    ]\n    for row in rows:\n        safe = [_clean(cell).replace('\\n', ' ') or '-' for cell in row]\n        lines.append('| ' + ' | '.join(safe) + ' |')\n    return '\\n'.join(lines)\n\n\ndef _candidate_kind(action, candidates):\n    if _clean(action)\
+          \ == 'search_opportunities':\n        return 'opportunity'\n    if _clean(action) == 'search_customers':\n        return 'customer'\n    for item in candidates:\n        if isinstance(item, dict) and any(_clean(item.get(key)) for key in ['customerName', 'stageName', 'amount', 'possible']):\n            return 'opportunity'\n    return 'customer'\n\n\ndef _candidate_answer(evidence, original_query):\n    candidates = evidence.get('candidates') if isinstance(evidence.get('candidates'), list) else []\n    kind = _candidate_kind(evidence.get('action'), candidates)\n    count = evidence.get('count') or len(candidates)\n    if kind == 'opportunity':\n        rows = []\n        for item in candidates[:10]:\n            if not isinstance(item, dict):\n                continue\n            rows.append([\n                _fmt(item.get('name')),\n                _fmt(item.get('customerName')),\n                _fmt(item.get('stageName') or item.get('stage')),\n                _money(item.get('amount')),\n\
+          \                _percent(item.get('possible')),\n                _fmt(item.get('ownerName') or item.get('owner')),\n                _date(item.get('expectedEndTime') or item.get('expected_end_time')),\n            ])\n        title = f'查到 {count} 条匹配商机，先按 CRM 返回结果列出：'\n        return title + '\\n\\n' + _md_table(['商机名称', '客户', '阶段', '金额', '赢率', '负责人', '预计成交'], rows)\n\n    rows = []\n    for item in candidates[:10]:\n        if not isinstance(item, dict):\n            continue\n        rows.append([\n            _fmt(item.get('name')),\n            _fmt(item.get('ownerName') or item.get('owner')),\n            _fmt(item.get('levelName') or item.get('level')),\n            _fmt(item.get('industryName') or item.get('industry')),\n            _date(item.get('followTime') or item.get('follow_time')),\n        ])\n    title = f'查到 {count} 条匹配客户，先按 CRM 返回结果列出：'\n    return title + '\\n\\n' + _md_table(['客户名称', '负责人', '级别', '行业', '最近跟进'], rows)\n\n\ndef _detail_answer(evidence):\n  \
+          \  data = _first_data(evidence)\n    opp = data.get('opportunity') if isinstance(data.get('opportunity'), dict) else {}\n    customer = data.get('customer') if isinstance(data.get('customer'), dict) else {}\n    facts = data.get('businessFacts') if isinstance(data.get('businessFacts'), dict) else {}\n    if opp:\n        rows = [\n            ['商机名称', _fmt(opp.get('name') or facts.get('opportunityName'))],\n            ['客户', _fmt(opp.get('customerName') or customer.get('name') or facts.get('customerName'))],\n            ['阶段', _fmt(opp.get('stageName') or facts.get('stageName'))],\n            ['金额', _money(opp.get('amount') or facts.get('amount'))],\n            ['赢率', _percent(opp.get('possible') or facts.get('winRate'))],\n            ['负责人', _fmt(opp.get('ownerName') or facts.get('ownerName'))],\n            ['最新跟进', _fmt(facts.get('latestFollowRecord'))],\n            ['下一步计划', _fmt(facts.get('nextFollowPlan'))],\n        ]\n        return '这是当前 CRM 里查到的商机摘要：\\n\\n' + _md_table(['项目',\
+          \ '信息'], rows)\n    if customer:\n        rows = [\n            ['客户名称', _fmt(customer.get('name'))],\n            ['负责人', _fmt(customer.get('ownerName') or customer.get('owner'))],\n            ['客户级别', _fmt(customer.get('levelName') or customer.get('level'))],\n            ['行业', _fmt(customer.get('industryName') or customer.get('industry'))],\n        ]\n        opportunities = data.get('opportunities') if isinstance(data.get('opportunities'), list) else []\n        answer = '这是当前 CRM 里查到的客户摘要：\\n\\n' + _md_table(['项目', '信息'], rows)\n        if opportunities:\n            answer += '\\n\\n关联商机：\\n\\n' + _md_table(\n                ['商机名称', '阶段', '金额', '赢率'],\n                [[_fmt(item.get('name')), _fmt(item.get('stageName') or item.get('stage')), _money(item.get('amount')), _percent(item.get('possible'))] for item in opportunities[:10] if isinstance(item, dict)]\n            )\n        return answer\n    return ''\n\n\ndef main(crm_evidence_json: str = '', original_query:\
+          \ str = '', answer_mode: str = '', multi_object_strategy: str = '') -> dict:\n    evidence = _loads(crm_evidence_json, {})\n    tool_errors = evidence.get('tool_errors') if isinstance(evidence.get('tool_errors'), list) else []\n    gaps = evidence.get('gaps') if isinstance(evidence.get('gaps'), list) else []\n    candidates = evidence.get('candidates') if isinstance(evidence.get('candidates'), list) else []\n\n    if candidates:\n        return {'answer_text': _candidate_answer(evidence, original_query)}\n\n    detail = _detail_answer(evidence)\n    if detail:\n        return {'answer_text': detail}\n\n    if tool_errors:\n        return {'answer_text': 'CRM 查询没有拿到可用结果：' + '；'.join(_clean(item) for item in tool_errors if _clean(item))}\n    if gaps:\n        return {'answer_text': 'CRM 查询暂时没有足够信息：' + '；'.join(_clean(item) for item in gaps if _clean(item))}\n    return {'answer_text': 'CRM 查询完成，但没有返回可展示的客户或商机数据。'}\n"
+        code_language: python3
+        desc: 处理 CRM 列表/详情读取任务，直接生成轻量 Markdown 回答。
+        outputs:
+          answer_text:
+            children: null
+            type: string
+        selected: false
+        title: CRM 轻量读取回答
+        type: code
+        variables:
+        - value_selector:
+          - crm_evidence
+          - evidence_json
+          variable: crm_evidence_json
+        - value_selector:
+          - conversation_context
+          - original_query
+          variable: original_query
+        - value_selector:
+          - task_plan_normalize
+          - answer_mode
+          variable: answer_mode
+        - value_selector:
+          - task_plan_normalize
+          - multi_object_strategy
+          variable: multi_object_strategy
+      height: 96
+      id: crm_light_answer
+      position:
+        x: 7724
+        y: 1044
+      positionAbsolute:
+        x: 7724
+        y: 1044
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+    viewport:
+      x: -7380.010159275399
+      y: 457.887801050628
+      zoom: 1.1486983549970349
+  rag_pipeline_variables: []
+

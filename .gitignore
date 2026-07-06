@@ -1,0 +1,60 @@
+# OS / editor
+.DS_Store
+Thumbs.db
+Desktop.ini
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Local tools and temp files
+.agents/
+.codex-logs/
+.codex-tmp/
+tmp/
+tmp-runtime/
+temp/
+logs/
+*.log
+*.out
+*.bak-*
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+*.local
+*.pem
+*.key
+
+# Node.js
+node_modules/
+dist/
+coverage/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Java / Maven
+build/
+target/
+out/
+*.class
+*.jar
+*.war
+*.ear
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+
+# Personal / generated artifacts
+简历/
+output/
+deploy/edgeone-ai-resume/
