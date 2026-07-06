@@ -14,6 +14,37 @@
 - **支持数据写入草稿**：当前公开版默认不直接写入 CRM；当用户提出保存、写入或创建跟进计划时，会生成可复制的跟进记录/计划草稿，并保留后续接入真实写回的协议边界。
 - **支持会话上下文复用**：连续对话中可复用已绑定客户或商机；对象不唯一时通过 Markdown 候选列表提示用户补充完整名称。
 
+## 效果预览
+
+以下截图基于演示数据，用于展示 CRM 内嵌式 AI 工作台的核心交互效果。
+
+<table>
+  <tr>
+    <td width="50%">
+      <strong>CRM 查询与连续追问</strong><br>
+      <sub>通过自然语言查询客户/商机；对象不唯一时用候选列表澄清，后续追问可复用当前会话上下文。</sub><br><br>
+      <img src="docs/assets/demo-crm-query-followup.png" alt="CRM 查询与连续追问" width="100%">
+    </td>
+    <td width="50%">
+      <strong>可视化图表输出</strong><br>
+      <sub>经营分析类问题可输出漏斗图、柱状图等可视化结果，帮助快速识别重点阶段和转化瓶颈。</sub><br><br>
+      <img src="docs/assets/demo-chart-output.png" alt="可视化图表输出" width="100%">
+    </td>
+  </tr>
+  <tr>
+    <td width="50%">
+      <strong>外部情报与 CRM 证据结合</strong><br>
+      <sub>外部公开资料作为辅助证据进入判断链路，并与 CRM 内部事实区分展示。</sub><br><br>
+      <img src="docs/assets/demo-external-intel.png" alt="外部情报与 CRM 证据结合" width="100%">
+    </td>
+    <td width="50%">
+      <strong>复杂商机多 Agent 评审</strong><br>
+      <sub>围绕销售、财务、交付、合同等视角进行专项判断，汇总成结论、风险边界和下一步建议。</sub><br><br>
+      <img src="docs/assets/demo-multi-agent-review.png" alt="复杂商机多 Agent 评审" width="100%">
+    </td>
+  </tr>
+</table>
+
 ## 协作架构
 
 ![AI Deal Desk 多智能体协作架构](docs/assets/ai-deal-desk-agent-architecture.png)
