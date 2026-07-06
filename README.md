@@ -1,6 +1,33 @@
-# 多Agent智能助手
+<h1 align="center">多Agent智能助手</h1>
 
-这是一个嵌入 CRM 的 AI 商机协同工作台示例项目。项目基于 CordysCRM 开源 CRM 底座扩展，围绕销售真实工作流完成“查询业务上下文、生成判断与建议、输出可执行草稿”的只读演示闭环。
+<p align="center">
+  <strong>AI Deal Desk for CRM</strong><br>
+  嵌入 CRM 的多 Agent 商机协同工作台，帮助销售完成查询上下文、生成判断、输出建议与写回草稿的业务闭环。
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/Dify-Chatflow-1677ff?style=flat-square" alt="Dify Chatflow">
+  <img src="https://img.shields.io/badge/Multi--Agent-Deal%20Review-10b981?style=flat-square" alt="Multi Agent">
+  <img src="https://img.shields.io/badge/CRM-CordysCRM-f59e0b?style=flat-square" alt="CordysCRM">
+  <img src="https://img.shields.io/badge/Public%20Version-Secret%20Free-64748b?style=flat-square" alt="Secret Free">
+</p>
+
+本项目基于 CordysCRM 开源 CRM 底座扩展，围绕销售真实工作流完成“查询业务上下文、生成判断与建议、输出可执行草稿”的只读演示闭环。它重点展示 AI 产品设计、Agent 编排、CRM 工具协议和前端交互联动，而不是重做 CRM 基础业务。
+
+## 目标工作台
+
+下图是面向作品集展示的目标工作台形态，用于说明最终希望呈现的 CRM 内嵌式 AI 商机评审体验。当前公开版以可运行演示、Chatflow 模板、模拟数据和文档为主，部分右侧 CRM 上下文与写回确认区域属于目标态设计。
+
+![AI Deal Desk 目标工作台](docs/assets/target-ai-deal-desk-workbench.png)
+
+## 项目亮点
+
+| 亮点 | 说明 |
+| --- | --- |
+| CRM 内嵌体验 | AI 入口放在 CRM 工作流内，围绕客户、商机、联系人、跟进记录和计划等真实业务对象展开。 |
+| 多 Agent 商机评审 | 将复杂商机拆成销售、财务、交付、合同等视角，再汇总成风险、结论和下一步动作建议。 |
+| 证据驱动回答 | CRM 数据、知识库规则、附件摘要和外部情报按需进入判断链路，减少纯 Prompt 式空泛回答。 |
+| 公开版可复用 | GitHub 版本已脱敏，不包含个人 API Key、真实域名和个人简历，便于导入、学习和二次改造。 |
 
 ## 🔥 功能介绍
 
