@@ -54,6 +54,20 @@ class AiDealDeskDifyToolControllerTest {
     }
 
     @Test
+    void shouldDispatchCrmObjectResolverWithValidToken() {
+        FakeToolService service = new FakeToolService();
+        AiDealDeskDifyToolController controller = new AiDealDeskDifyToolController(service, "secret-token", "admin", "100001");
+        DealDeskToolRequest request = new DealDeskToolRequest();
+        request.setObjectReference("华东智造集团AI客服升级项目");
+
+        DealDeskToolResponse response = controller.invokeTool("resolve-crm-object", "secret-token", request);
+
+        assertTrue(response.isSuccess());
+        assertEquals("resolve-crm-object", response.getData().get("tool"));
+        assertEquals(1, service.resolveCrmObjectCalls);
+    }
+
+    @Test
     void shouldRejectUnknownToolName() {
         FakeToolService service = new FakeToolService();
         AiDealDeskDifyToolController controller = new AiDealDeskDifyToolController(service, "secret-token", "admin", "100001");
@@ -80,12 +94,19 @@ class AiDealDeskDifyToolControllerTest {
 
     private static class FakeToolService extends AiDealDeskToolService {
         private int searchCustomersCalls;
+        private int resolveCrmObjectCalls;
         private int getOpportunityContextCalls;
 
         @Override
         public DealDeskToolResponse searchCustomers(DealDeskToolRequest request) {
             searchCustomersCalls += 1;
             return DealDeskToolResponse.ok(Map.of("tool", "search-customers"));
+        }
+
+        @Override
+        public DealDeskToolResponse resolveCrmObject(DealDeskToolRequest request) {
+            resolveCrmObjectCalls += 1;
+            return DealDeskToolResponse.ok(Map.of("tool", "resolve-crm-object"));
         }
 
         @Override

@@ -1,67 +1,21 @@
 app:
-  description: 'AI Deal Desk Phase 4 stable Chatflow for CRM deal review and writeback.
-
-
-    【模型 / 工具选型矩阵 · 2026-07-03 维护】
-
-    文本 LLM 节点（全部 siliconflow Pro/zai-org/GLM-5.1, enable_thinking: false）：
-
-    - 主 Agent 参数抽取：extract_params（GLM-5.1，温度 0.2，top_p 1）
-
-    - 检索改写：query_rewrite_v2（GLM-5.1，max_tokens 200，温度 0.2）
-
-    - 规则重排：rerank_rules_v2（GLM-5.1，max_tokens 1200，温度 0.2）
-
-    - 5 个专家/协调 Agent：sales_agent / finance_agent / delivery_agent / legal_agent /
-    coordinator_agent（GLM-5.1）
-
-    - 面向用户的 Agent：preflight_quick_answer / image_direct_answer / finance_task_agent
-    / delivery_task_agent / legal_task_agent / sales_task_agent（GLM-5.1；sales_task_agent
-    max_tokens 1500，温度 0.3）
-
-
-    工具型 Agent 节点：
-
-    - 外部情报检索 Agent：FunctionCalling，模型使用 GLM-5.1，工具为 current_time / Tavily Search /
-    Tavily Extract；只在外部情报门控命中后运行，由 Agent 自主决定是否搜索、是否抓取网页正文。
-
-
-    视觉 LLM 节点：
-
-    - attachment_image_summary：tongyi qwen3.6-plus，温度 0.2，detail=high
-
-
-    知识库：
-
-    - deal_rules_knowledge：single_retrieval_config 配 openai gpt-4o（如需切换国产模型请走 P1 评估），Top
-    K / 重排以导入后 Dify 节点为准
-
-
-    工具依赖：
-
-    - tavily：由外部情报检索 Agent 按需调用 tavily_search / tavily_extract
-
-    - time：由外部情报检索 Agent 按需调用 current_time
-
-
-    协议契约：所有 answer 节点输出仍走现有 protocol JSON（protocolVersion / turnType / answerText
-    / processEvents / boundObject / writeback / warnings），外部接口不变。'
+  description: crm 多智能助手
   icon: briefcase
   icon_background: '#E0F2FE'
   icon_type: emoji
   mode: advanced-chat
   name: AI Deal Desk - V3 Stable Enhanced
-  use_icon_as_answer_icon: false
+  use_icon_as_answer_icon: true
 dependencies:
 - current_identifier: null
   type: marketplace
   value:
-    marketplace_plugin_unique_identifier: langgenius/openai:0.4.2@21195ee1321849e0a7d4b3f6b2fd8c2be23ea6c7182e1b444ecc4c1711b52468
+    marketplace_plugin_unique_identifier: langgenius/openai_api_compatible:0.0.55@d64be9924f2edf13fd5329fc03fdfc0d0e0e36e0aef5321c4942f0845de8c030
     version: null
 - current_identifier: null
   type: marketplace
   value:
-    marketplace_plugin_unique_identifier: langgenius/openai_api_compatible:0.0.53@a0dfb462961a03c6a6415d4185043185b01017c64da93cf82a9e5ecaf59f8ed0
+    marketplace_plugin_unique_identifier: langgenius/siliconflow:0.0.58@6fdcfd505e388601b4643f78bf73c5ed5510b24e3b35af0582bc613f183eee6b
     version: null
 kind: app
 version: 0.6.0
@@ -131,17 +85,6 @@ workflow:
       - local_file
       - remote_url
       enabled: false
-      fileUploadConfig:
-        attachment_image_file_size_limit: 2
-        audio_file_size_limit: 50
-        batch_count_limit: 5
-        file_size_limit: 15
-        file_upload_limit: 50
-        image_file_batch_limit: 10
-        image_file_size_limit: 10
-        single_chunk_attachment_limit: 10
-        video_file_size_limit: 100
-        workflow_file_upload_limit: 10
       image:
         enabled: false
         number_limits: 3
@@ -300,12 +243,12 @@ workflow:
     - data:
         isInIteration: false
         sourceType: if-else
-        targetType: llm
-      id: task_type_gate-general_chat-simple_answer-target
+        targetType: code
+      id: task_type_gate-general_chat-protocol_adapter-target
       selected: false
       source: task_type_gate
       sourceHandle: general_chat
-      target: simple_answer
+      target: protocol_adapter
       targetHandle: target
       type: custom
       zIndex: 0
@@ -420,12 +363,24 @@ workflow:
     - data:
         isInIteration: false
         sourceType: code
-        targetType: if-else
-      id: evidence_router-source-knowledge_gate-target
+        targetType: code
+      id: crm_evidence-source-knowledge_context_prepare-target
       selected: false
-      source: evidence_router
+      source: crm_evidence
       sourceHandle: source
-      target: knowledge_gate
+      target: knowledge_context_prepare
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInIteration: false
+        sourceType: if-else
+        targetType: llm
+      id: knowledge_policy_gate-need_knowledge-knowledge_query_decider-target
+      selected: false
+      source: knowledge_policy_gate
+      sourceHandle: need_knowledge
+      target: knowledge_query_decider
       targetHandle: target
       type: custom
       zIndex: 0
@@ -433,11 +388,71 @@ workflow:
         isInIteration: false
         sourceType: if-else
         targetType: code
-      id: knowledge_gate-need_knowledge-query_rewrite-target
+      id: knowledge_policy_gate-false-knowledge_policy_skip-target
+      selected: false
+      source: knowledge_policy_gate
+      sourceHandle: 'false'
+      target: knowledge_policy_skip
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInIteration: false
+        sourceType: code
+        targetType: if-else
+      id: query_rewrite-source-knowledge_gate-target
+      selected: false
+      source: query_rewrite
+      sourceHandle: source
+      target: knowledge_gate
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInIteration: false
+        sourceType: code
+        targetType: code
+      id: attachment_evidence-source-knowledge_context_prepare-target
+      selected: false
+      source: attachment_evidence
+      sourceHandle: source
+      target: knowledge_context_prepare
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInIteration: false
+        sourceType: code
+        targetType: if-else
+      id: knowledge_context_prepare-source-knowledge_policy_gate-target
+      selected: false
+      source: knowledge_context_prepare
+      sourceHandle: source
+      target: knowledge_policy_gate
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInIteration: false
+        sourceType: llm
+        targetType: code
+      id: knowledge_query_decider-source-query_rewrite-target
+      selected: false
+      source: knowledge_query_decider
+      sourceHandle: source
+      target: query_rewrite
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInIteration: false
+        sourceType: if-else
+        targetType: knowledge-retrieval
+      id: knowledge_gate-need_knowledge-deal_rules_knowledge-target
       selected: false
       source: knowledge_gate
       sourceHandle: need_knowledge
-      target: query_rewrite
+      target: deal_rules_knowledge
       targetHandle: target
       type: custom
       zIndex: 0
@@ -456,12 +471,12 @@ workflow:
     - data:
         isInIteration: false
         sourceType: code
-        targetType: knowledge-retrieval
-      id: query_rewrite-source-deal_rules_knowledge-target
+        targetType: variable-aggregator
+      id: knowledge_policy_skip-source-knowledge_merge-target
       selected: false
-      source: query_rewrite
+      source: knowledge_policy_skip
       sourceHandle: source
-      target: deal_rules_knowledge
+      target: knowledge_merge
       targetHandle: target
       type: custom
       zIndex: 0
@@ -912,24 +927,24 @@ workflow:
     - data:
         isInIteration: false
         sourceType: llm
-        targetType: code
-      id: simple_answer-source-protocol_adapter-target
+        targetType: answer
+      id: simple_answer-source-simple_answer_stream-target
       selected: false
       source: simple_answer
       sourceHandle: source
-      target: protocol_adapter
+      target: simple_answer_stream
       targetHandle: target
       type: custom
       zIndex: 0
     - data:
         isInIteration: false
         sourceType: llm
-        targetType: code
-      id: image_answer-source-protocol_adapter-target
+        targetType: answer
+      id: image_answer-source-image_answer_stream-target
       selected: false
       source: image_answer
       sourceHandle: source
-      target: protocol_adapter
+      target: image_answer_stream
       targetHandle: target
       type: custom
       zIndex: 0
@@ -948,12 +963,12 @@ workflow:
     - data:
         isInIteration: false
         sourceType: llm
-        targetType: code
-      id: business_answer_agent-source-protocol_adapter-target
+        targetType: answer
+      id: business_answer_agent-source-business_answer_stream-target
       selected: false
       source: business_answer_agent
       sourceHandle: source
-      target: protocol_adapter
+      target: business_answer_stream
       targetHandle: target
       type: custom
       zIndex: 0
@@ -1174,6 +1189,46 @@ workflow:
       type: custom
       width: 242
     - data:
+        code: "def _clean(value):\n    if value is None:\n        return ''\n    return\
+          \ str(value).strip()\n\n\ndef main(crm_evidence_json: str = '', attachment_evidence_json:\
+          \ str = '') -> dict:\n    return {\n        'crm_evidence_json': _clean(crm_evidence_json)\
+          \ or '{}',\n        'attachment_evidence_json': _clean(attachment_evidence_json)\
+          \ or '{}',\n    }"
+        code_language: python3
+        desc: 等待 CRM 与附件并行分支完成，形成知识检索决策的明确前置上下文；不做关键词提取或业务判断。
+        outputs:
+          attachment_evidence_json:
+            children: null
+            type: string
+          crm_evidence_json:
+            children: null
+            type: string
+        selected: false
+        title: 知识检索上下文准备
+        type: code
+        variables:
+        - value_selector:
+          - crm_evidence
+          - evidence_json
+          variable: crm_evidence_json
+        - value_selector:
+          - attachment_evidence
+          - evidence_json
+          variable: attachment_evidence_json
+      height: 112
+      id: knowledge_context_prepare
+      position:
+        x: 4184
+        y: 900
+      positionAbsolute:
+        x: 4184
+        y: 900
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+    - data:
         cases:
         - case_id: has_images
           conditions:
@@ -1204,6 +1259,30 @@ workflow:
       type: custom
       width: 242
     - data:
+        answer: '{{#simple_answer.text#}}'
+        desc: 轻量回答直接流式输出。
+        selected: false
+        title: 输出轻量回答
+        type: answer
+        variables:
+        - value_selector:
+          - simple_answer
+          - text
+          variable: text
+      height: 131
+      id: simple_answer_stream
+      position:
+        x: 4184
+        y: 331.66666666666663
+      positionAbsolute:
+        x: 4184
+        y: 331.66666666666663
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+    - data:
         context:
           enabled: false
           variable_selector: []
@@ -1214,7 +1293,7 @@ workflow:
             assistant: ''
             user: ''
           window:
-            enabled: false
+            enabled: true
             size: 5
         model:
           completion_params:
@@ -1244,7 +1323,7 @@ workflow:
             - 与客户、商机、风险或下一步动作相关的内容
 
             - 识别不清或缺失的信息'
-        selected: true
+        selected: false
         title: 附件 - 图片/截图识别
         type: llm
         variables: []
@@ -1263,7 +1342,7 @@ workflow:
       positionAbsolute:
         x: 5388.297396709994
         y: -81.45486770220941
-      selected: true
+      selected: false
       sourcePosition: right
       targetPosition: left
       type: custom
@@ -1480,8 +1559,8 @@ workflow:
           \        'original_query': _clean(original_query),\n        'bound_object_json':\
           \ _clean(bound_object_json) or '{}',\n        'context_text': '\\n'.join([\n\
           \            f\"用户问题：{_clean(original_query)}\",\n            _clean(page_context_text),\n\
-          \            f\"附件摘要：{_clean(attachments_summary) or '无'}\",\n        ]).strip(),\n\
-          \    }\n"
+          \            f\"附件摘要：{_clean(attachments_summary) or '无'}\" if not _clean(page_context_text)\
+          \ else '',\n        ]).strip(),\n    }\n"
         code_language: python3
         desc: 形成 Planner 和下游证据链共用的会话上下文。
         outputs:
@@ -1531,19 +1610,26 @@ workflow:
         agent_parameters:
           instruction:
             type: constant
-            value: "你是 AI Deal Desk 的 Planner。你的任务不是回答用户，而是判断本轮 CRM 工作任务应走哪条工作链路、目标对象是什么、需要哪些证据来源、是否需要领域\
-              \ Agent、以及最终回答应该多深。\n\n你可以使用 CRM 只读工具辅助识别客户或商机。不要调用写入工具，不要生成最终答案。\n\n\
-              核心原则：\n- 不按关键词触发链路。先理解用户真正要的输出：事实读取、业务判断、图表统计、外部研判、内容草稿、图片直答，还是普通问答。\n\
+            value: "你是 AI Deal Desk 的 Planner。你的主要任务是判断本轮 CRM 工作任务应走哪条工作链路、目标对象是什么、需要哪些证据来源、是否需要领域\
+              \ Agent、以及最终回答应该多深。只有普通轻量回答链路由你直接生成答案。\n\n你只能使用 CRM 对象解析工具确认用户指向的真实客户或商机。该工具不负责读取完整业务上下文。不要调用写入工具。除\
+              \ general_chat 外，不要生成最终答案。\n\n核心原则：\n- 不按关键词触发链路。先理解用户真正要的输出：事实读取、业务判断、图表统计、外部研判、内容草稿、图片直答，还是普通问答。\n\
               - 默认只满足用户明确提出的问题。用户只问事实列表时，不主动补风险、卡点、建议、下一步、缺失字段；用户要求判断/评审/推进/建议时，再进入分析链路。\n\
               - 多个结果不天然等于歧义。用户要“查一批/列一批/看某客户名下对象”时，应把多结果作为列表；只有用户要对某一个具体对象做深入判断而对象不唯一时，才要求澄清。\n\
               - 回答深度由 answer_scope 控制：minimal 一两句；concise 简洁列表或摘要；standard 有结论和依据；deep_review\
-              \ 多视角评审。\n\n工具调用边界：\n- 只有用户问题需要识别具体客户或商机时才调用 CRM 搜索工具。\n- 遇到漏斗、转化、赢单率、收入、回款统计、经营分析、排优先级这类销售管理问题时，直接选择经营统计/图表链路，不要为了示例客户或“这类商机”调用客户/商机搜索工具。\n\
-              - 如果页面上下文或输入变量已经提供 bound_object_id、route_opportunity_id、route_customer_id\
-              \ 或 selected_object_id，说明对象已绑定或已选择完成。此时不要调用 search_customers、search_opportunities、get_customer_context\
-              \ 或 get_opportunity_context；直接使用已绑定对象输出规划，详情统一交给后续 CRM 数据读取节点。\n\n可选工作链路：\n\
-              1. 普通轻量回答链路\n   - 用于不需要 CRM、外部检索、知识库或领域 Agent 的普通问答、身份介绍、概念解释。\n   -\
-              \ task_type=general_chat，answer_mode=general，required_sources 全 false，required_agents\
-              \ 全 false。\n\n2. 图片/附件直答链路\n   - 用于用户主要要求解释图片、截图或附件内容本身。\n   - task_type=image_answer，answer_mode=general，required_sources.attachment=true。\n\
+              \ 多视角评审。\n\n对象识别与工具调用边界：\n- 只有当前任务需要一个具体客户或商机，且用户本轮明确说出了新的对象名称时，才调用\
+              \ resolve_crm_object。objectReference 只传客户名或商机名，不传整句任务要求。\n- 用户本轮明确提到的新对象优先于页面已绑定对象；即使已有\
+              \ bound_object，也要解析并切换到新对象。\n- 用户说“这个商机”“当前客户”等指代，或本轮没有提出新对象名称时，直接复用页面提供的\
+              \ bound_object，不调用工具。\n- 经营统计、全量列表、普通问答和图片直答不要求具体对象时，resolution_status=not_required，不要为了示例对象调用工具。\n\
+              - resolve_crm_object 返回 resolved_object 时，把真实 objectType/objectId/objectName\
+              \ 写入 target_object，resolution_status=resolved。\n- 工具返回 OBJECT_AMBIGUOUS\
+              \ 时，不得猜测或沿用旧 bound_object；保留 object_reference，target_object 置空，resolution_status=ambiguous。\n\
+              - 工具返回 OBJECT_NOT_FOUND 时，不得构造对象；保留 object_reference，target_object 置空，resolution_status=not_found。\n\
+              - 使用页面绑定对象时 resolution_status=bound；任务需要具体对象但没有名称也没有绑定对象时 resolution_status=missing。\n\
+              - 对象详情统一交给后续 CRM 数据读取节点，不在 Planner 中调用客户或商机详情工具。\n\n可选工作链路：\n1. 普通轻量回答链路\n\
+              \   - 用于不需要 CRM、外部检索、知识库或领域 Agent 的普通问答、身份介绍、概念解释。\n   - task_type=general_chat，answer_mode=general，required_sources\
+              \ 全 false，required_agents 全 false。\n   - 直接在 direct_answer 中给出面向用户的完整回答；不要再规划第二次模型调用。\n\
+              \   - direct_answer 只允许在 general_chat 中非空，其他任务必须输出空字符串。\n\n2. 图片/附件直答链路\n\
+              \   - 用于用户主要要求解释图片、截图或附件内容本身。\n   - task_type=image_answer，answer_mode=general，required_sources.attachment=true。\n\
               \n3. CRM 事实读取链路\n   - 用于读取 CRM 事实：客户、商机、联系人、跟进记录、单条详情、某对象名下的对象列表。\n\
               \   - 只产出事实列表或简洁详情，不做销售推进、风险判断、合同/财务/交付建议。\n   - task_type=object_query，required_sources.crm=true，required_agents\
               \ 全 false。\n   - 列表型事实读取：answer_mode=list_lookup，multi_object_strategy=list，answer_scope=concise。\n\
@@ -1569,129 +1655,73 @@ workflow:
               回答模式 answer_mode 只能取：list_lookup, detail_lookup, analysis, chart, draft,\
               \ general。\n多对象策略 multi_object_strategy 只能取：list, ask_clarification,\
               \ rank, summarize。\n回答深度 answer_scope 只能取：minimal, concise, standard,\
-              \ deep_review。\n\n输出硬约束：只能输出一个 JSON 对象，不要 Markdown，不要代码块，不要解释。\nJSON\
-              \ 结构：\n{\n  \"task_type\": \"general_chat\",\n  \"target_object\": {\n\
-              \    \"object_type\": \"none\",\n    \"object_name\": \"\",\n    \"\
-              object_id\": \"\",\n    \"relation_target\": \"none\"\n  },\n  \"required_sources\"\
-              : {\n    \"crm\": false,\n    \"knowledge\": false,\n    \"external\"\
-              : false,\n    \"attachment\": false\n  },\n  \"required_agents\": {\n\
+              \ deep_review。\n\n\n知识库策略：\n- 由你基于任务语义选择 knowledge_policy，只能取 none、required、conditional；禁止用关键词命中决定。\n\
+              - none：当前回答只需 CRM/附件/外部事实或普通整理，不需要内部规则、政策、业务基线或责任边界。\n- required：用户明确要求规则、审批、业务基线或责任边界，或缺少内部规则就无法可靠完成判断。\n\
+              - conditional：知识规则可能有价值，但是否检索取决于后续读到的 CRM 与附件事实；完整商机评审通常优先考虑 conditional，而不是无条件检索。\n\
+              - knowledge_goal 用一句话说明需要查清哪类内部规则，不要预写固定关键词，不要复制用户整句。\n- required_sources.knowledge\
+              \ 仅保留兼容性：knowledge_policy 不是 none 时为 true，否则为 false。最终是否真的执行检索，由后续节点结合\
+              \ CRM/附件证据决定。\n\n输出硬约束：只能输出一个 JSON 对象，不要 Markdown，不要代码块，不要解释。\nJSON\
+              \ 结构：\n{\n  \"task_type\": \"general_chat\",\n  \"object_reference\"\
+              : \"\",\n  \"resolution_status\": \"not_required\",\n  \"target_object\"\
+              : {\n    \"object_type\": \"none\",\n    \"object_name\": \"\",\n  \
+              \  \"object_id\": \"\",\n    \"relation_target\": \"none\"\n  },\n \
+              \ \"required_sources\": {\n    \"crm\": false,\n    \"knowledge\": false,\n\
+              \    \"external\": false,\n    \"attachment\": false\n  },\n  \"knowledge_policy\"\
+              : \"none\",\n  \"knowledge_goal\": \"\",\n  \"required_agents\": {\n\
               \    \"sales\": false,\n    \"finance\": false,\n    \"delivery\": false,\n\
               \    \"legal\": false,\n    \"analytics\": false\n  },\n  \"answer_mode\"\
               : \"general\",\n  \"multi_object_strategy\": \"ask_clarification\",\n\
-              \  \"answer_scope\": \"concise\",\n  \"answer_goal\": \"\",\n  \"success_criteria\"\
-              : [],\n  \"reason\": \"\",\n  \"confidence\": 0.0\n}"
+              \  \"answer_scope\": \"concise\",\n  \"answer_goal\": \"\",\n  \"direct_answer\"\
+              : \"\",\n  \"success_criteria\": [],\n  \"reason\": \"\",\n  \"confidence\"\
+              : 0.0\n}"
           maximum_iterations:
             type: constant
             value: 2
           model:
             type: constant
             value:
-              completion_params:
-                enable_thinking: false
+              completion_params: {}
               mode: chat
-              model: gpt-5.5
+              model: kk
               model_type: llm
               provider: langgenius/openai_api_compatible/openai_api_compatible
               type: model-selector
           query:
             type: constant
-            value: '用户问题：{{#conversation_context.original_query#}}
-
-
-              页面与附件上下文：
-
-              {{#conversation_context.context_text#}}'
+            value: '{{#conversation_context.context_text#}}'
           tools:
             type: constant
             value:
             - enabled: true
               extra:
-                description: Search CRM customers by organization or customer name.
-              parameters:
-                includeContextOnUnique:
-                  auto: 1
-                  value: null
-                keyword:
-                  auto: 1
-                  value: null
-                limit:
-                  auto: 1
-                  value: null
-              plugin_id: null
-              provider_name: e152d1b6-0354-41af-9de6-6a188610fa01
-              provider_show_name: AI Deal Desk CRM2
-              settings: {}
-              tool_description: Search CRM customers by organization or customer name.
-              tool_label: search_customers
-              tool_name: search_customers
-              type: api
-            - enabled: true
-              extra:
-                description: Search CRM opportunities by opportunity, project, quote,
-                  or customer keyword.
-              parameters:
-                includeContextOnUnique:
-                  auto: 1
-                  value: null
-                keyword:
-                  auto: 1
-                  value: null
-                limit:
-                  auto: 1
-                  value: null
-              plugin_id: null
-              provider_name: e152d1b6-0354-41af-9de6-6a188610fa01
-              provider_show_name: AI Deal Desk CRM2
-              settings: {}
-              tool_description: Search CRM opportunities by opportunity, project,
-                quote, or customer keyword.
-              tool_label: search_opportunities
-              tool_name: search_opportunities
-              type: api
-            - enabled: true
-              extra:
-                description: Get customer profile, related opportunities, contacts,
-                  and recent follow-up context.
-              parameters:
-                customerId:
-                  auto: 1
-                  value: null
-                limit:
-                  auto: 1
-                  value: null
-              plugin_id: null
-              provider_name: e152d1b6-0354-41af-9de6-6a188610fa01
-              provider_show_name: AI Deal Desk CRM2
-              settings: {}
-              tool_description: Get customer profile, related opportunities, contacts,
-                and recent follow-up context.
-              tool_label: get_customer_context
-              tool_name: get_customer_context
-              type: api
-            - enabled: true
-              extra:
-                description: Get opportunity detail, customer, contacts, follow-up
-                  records, plans, and business context.
+                description: 同时搜索客户和商机；返回唯一精确对象、唯一模糊对象或真实候选列表。只确认对象，不读取完整业务上下文。
               parameters:
                 limit:
                   auto: 1
                   value: null
-                opportunityId:
+                objectReference:
                   auto: 1
                   value: null
               plugin_id: null
-              provider_name: e152d1b6-0354-41af-9de6-6a188610fa01
-              provider_show_name: AI Deal Desk CRM2
+              provider_name: 77b8b942-005e-45c7-aeed-5a70fb77113d
+              provider_show_name: AI Deal Desk CRM Resolver
               settings: {}
-              tool_description: Get opportunity detail, customer, contacts, follow-up
-                records, plans, and business context.
-              tool_label: get_opportunity_context
-              tool_name: get_opportunity_context
+              tool_description: 同时搜索客户和商机；返回唯一精确对象、唯一模糊对象或真实候选列表。只确认对象，不读取完整业务上下文。
+              tool_label: resolve_crm_object
+              tool_name: resolve_crm_object
               type: api
-        agent_strategy_label: ReAct
-        agent_strategy_name: ReAct
+        agent_strategy_label: FunctionCalling
+        agent_strategy_name: function_calling
         agent_strategy_provider_name: langgenius/agent/agent
-        desc: 只做任务规划、对象识别和能力选择，不直接回答用户。
+        desc: 完成任务规划、对象识别、知识策略和能力选择；普通问答同时直接生成答案。
+        memory:
+          query_prompt_template: ''
+          role_prefix:
+            assistant: ''
+            user: ''
+          window:
+            enabled: true
+            size: 5
         meta:
           minimum_dify_version: 1.7.0
           version: 0.0.2
@@ -1701,7 +1731,7 @@ workflow:
         title: Planner - 任务理解与规划
         tool_node_version: '2'
         type: agent
-      height: 232
+      height: 248
       id: task_planner
       position:
         x: 7118.297396709994
@@ -1719,77 +1749,89 @@ workflow:
           \ 'image_answer', 'object_query', 'progress_summary',\n    'sales_assist',\
           \ 'finance_check', 'delivery_check', 'legal_check',\n    'full_review',\
           \ 'stats_analysis', 'content_draft', 'followup_plan',\n    'external_research',\
-          \ 'unknown',\n}\n\nVALID_ANSWER_MODES = {\n    'list_lookup', 'detail_lookup',\
-          \ 'analysis', 'chart', 'draft', 'general'\n}\n\nVALID_MULTI_OBJECT_STRATEGIES\
-          \ = {\n    'list', 'ask_clarification', 'rank', 'summarize'\n}\n\nVALID_ANSWER_SCOPES\
-          \ = {\n    'minimal', 'concise', 'standard', 'deep_review'\n}\n\n\ndef _clean(value):\n\
-          \    if value is None:\n        return ''\n    return str(value).strip()\n\
-          \n\ndef _load_json(text):\n    text = _clean(text)\n    if not text:\n \
-          \       return {}\n    try:\n        return json.loads(text)\n    except\
-          \ Exception:\n        match = re.search(r'\\{.*\\}', text, flags=re.S)\n\
-          \        if not match:\n            return {}\n        try:\n          \
-          \  return json.loads(match.group(0))\n        except Exception:\n      \
-          \      return {}\n\n\ndef _bool(value):\n    if isinstance(value, bool):\n\
-          \        return value\n    return _clean(value).lower() in ['true', '1',\
-          \ 'yes', 'y', '是', '需要']\n\n\ndef _choose_answer_mode(task_type, payload):\n\
-          \    answer_mode = _clean(payload.get('answer_mode')) if isinstance(payload,\
+          \ 'unknown',\n}\nVALID_ANSWER_MODES = {'list_lookup', 'detail_lookup', 'analysis',\
+          \ 'chart', 'draft', 'general'}\nVALID_MULTI_OBJECT_STRATEGIES = {'list',\
+          \ 'ask_clarification', 'rank', 'summarize'}\nVALID_ANSWER_SCOPES = {'minimal',\
+          \ 'concise', 'standard', 'deep_review'}\nVALID_RESOLUTION_STATUSES = {'not_required',\
+          \ 'bound', 'resolved', 'ambiguous', 'not_found', 'missing'}\nVALID_KNOWLEDGE_POLICIES\
+          \ = {'none', 'required', 'conditional'}\n\n\ndef _clean(value):\n    if\
+          \ value is None:\n        return ''\n    return str(value).strip()\n\n\n\
+          def _load_json(text):\n    text = _clean(text)\n    if not text:\n     \
+          \   return {}\n    try:\n        return json.loads(text)\n    except Exception:\n\
+          \        match = re.search(r'\\{.*\\}', text, flags=re.S)\n        if not\
+          \ match:\n            return {}\n        try:\n            return json.loads(match.group(0))\n\
+          \        except Exception:\n            return {}\n\n\ndef _bool(value):\n\
+          \    if isinstance(value, bool):\n        return value\n    return _clean(value).lower()\
+          \ in ['true', '1', 'yes', 'y', '是', '需要']\n\n\ndef _choose_answer_mode(task_type,\
+          \ payload):\n    answer_mode = _clean(payload.get('answer_mode')) if isinstance(payload,\
           \ dict) else ''\n    if answer_mode in VALID_ANSWER_MODES:\n        return\
-          \ answer_mode\n\n    defaults = {\n        'general_chat': 'general',\n\
-          \        'image_answer': 'general',\n        'object_query': 'detail_lookup',\n\
+          \ answer_mode\n    defaults = {\n        'general_chat': 'general',\n  \
+          \      'image_answer': 'general',\n        'object_query': 'detail_lookup',\n\
           \        'stats_analysis': 'chart',\n        'content_draft': 'draft',\n\
           \        'followup_plan': 'draft',\n    }\n    return defaults.get(task_type,\
           \ 'analysis')\n\n\ndef _choose_multi_object_strategy(answer_mode, task_type,\
           \ payload):\n    strategy = _clean(payload.get('multi_object_strategy'))\
           \ if isinstance(payload, dict) else ''\n    if strategy in VALID_MULTI_OBJECT_STRATEGIES:\n\
           \        return strategy\n    if answer_mode == 'list_lookup':\n       \
-          \ return 'list'\n    if answer_mode == 'chart':\n        return 'summarize'\n\
-          \    if task_type in ['stats_analysis', 'external_research']:\n        return\
-          \ 'summarize'\n    return 'ask_clarification'\n\n\ndef _choose_answer_scope(answer_mode,\
-          \ task_type, payload):\n    scope = _clean(payload.get('answer_scope'))\
-          \ if isinstance(payload, dict) else ''\n    if scope in VALID_ANSWER_SCOPES:\n\
-          \        return scope\n    if task_type == 'full_review':\n        return\
-          \ 'deep_review'\n    if answer_mode in ['list_lookup', 'detail_lookup',\
-          \ 'general']:\n        return 'concise'\n    if answer_mode == 'draft':\n\
-          \        return 'standard'\n    return 'standard'\n\n\ndef main(planner_text:\
-          \ str = '', has_images: str = '', bound_object_json: str = '', original_query:\
-          \ str = '') -> dict:\n    payload = _load_json(planner_text)\n    task_type\
-          \ = _clean(payload.get('task_type')) if isinstance(payload, dict) else 'unknown'\n\
-          \    if task_type not in VALID_TASK_TYPES:\n        task_type = 'unknown'\n\
-          \n    image_present = _bool(has_images)\n    if task_type == 'image_answer'\
-          \ and not image_present:\n        task_type = 'general_chat'\n\n    answer_mode\
-          \ = _choose_answer_mode(task_type, payload)\n    multi_object_strategy =\
-          \ _choose_multi_object_strategy(answer_mode, task_type, payload)\n    answer_scope\
-          \ = _choose_answer_scope(answer_mode, task_type, payload)\n\n    business_tasks\
-          \ = VALID_TASK_TYPES - {'general_chat', 'image_answer', 'unknown'}\n   \
-          \ if task_type == 'general_chat':\n        route_group = 'general_chat'\n\
-          \    elif task_type == 'image_answer':\n        route_group = 'image_answer'\n\
-          \    elif task_type in business_tasks:\n        route_group = 'business_task'\n\
-          \    else:\n        route_group = 'general_chat'\n\n    required_sources\
-          \ = payload.get('required_sources') if isinstance(payload.get('required_sources'),\
-          \ dict) else {}\n    required_agents = payload.get('required_agents') if\
-          \ isinstance(payload.get('required_agents'), dict) else {}\n    target =\
-          \ payload.get('target_object') if isinstance(payload.get('target_object'),\
-          \ dict) else {}\n    if not target:\n        target = _load_json(bound_object_json)\n\
-          \n    if task_type in ['finance_check', 'delivery_check', 'legal_check',\
-          \ 'full_review']:\n        required_sources['knowledge'] = True\n      \
-          \  required_sources['crm'] = True\n    if task_type in ['object_query',\
-          \ 'progress_summary', 'sales_assist', 'stats_analysis', 'content_draft',\
-          \ 'followup_plan']:\n        required_sources['crm'] = True\n    if task_type\
-          \ == 'external_research':\n        required_sources['external'] = True\n\
-          \n    if task_type == 'object_query' and answer_mode in ['list_lookup',\
-          \ 'detail_lookup']:\n        required_sources['crm'] = True\n        required_agents\
-          \ = {'sales': False, 'finance': False, 'delivery': False, 'legal': False,\
-          \ 'analytics': False}\n\n    if task_type == 'full_review':\n        required_agents.update({'sales':\
-          \ True, 'finance': True, 'delivery': True, 'legal': True})\n    elif task_type\
-          \ == 'finance_check':\n        required_agents['finance'] = True\n    elif\
-          \ task_type == 'delivery_check':\n        required_agents['delivery'] =\
-          \ True\n    elif task_type == 'legal_check':\n        required_agents['legal']\
-          \ = True\n    elif task_type == 'stats_analysis':\n        required_agents['analytics']\
-          \ = True\n    elif task_type in ['progress_summary', 'sales_assist', 'content_draft',\
-          \ 'followup_plan', 'external_research']:\n        required_agents['sales']\
-          \ = True\n\n    if task_type == 'object_query' and answer_mode in ['list_lookup',\
-          \ 'detail_lookup']:\n        agent_route = 'crm_light_answer'\n    elif\
-          \ _bool(required_agents.get('sales')) and _bool(required_agents.get('finance'))\
+          \ return 'list'\n    if answer_mode == 'chart' or task_type in ['stats_analysis',\
+          \ 'external_research']:\n        return 'summarize'\n    return 'ask_clarification'\n\
+          \n\ndef _choose_answer_scope(answer_mode, task_type, payload):\n    scope\
+          \ = _clean(payload.get('answer_scope')) if isinstance(payload, dict) else\
+          \ ''\n    if scope in VALID_ANSWER_SCOPES:\n        return scope\n    if\
+          \ task_type == 'full_review':\n        return 'deep_review'\n    if answer_mode\
+          \ in ['list_lookup', 'detail_lookup', 'general']:\n        return 'concise'\n\
+          \    return 'standard'\n\n\ndef main(planner_text: str = '', has_images:\
+          \ str = '', bound_object_json: str = '', original_query: str = '') -> dict:\n\
+          \    payload = _load_json(planner_text)\n    task_type = _clean(payload.get('task_type'))\
+          \ if isinstance(payload, dict) else 'unknown'\n    if task_type not in VALID_TASK_TYPES:\n\
+          \        task_type = 'unknown'\n\n    image_present = _bool(has_images)\n\
+          \    if task_type == 'image_answer' and not image_present:\n        task_type\
+          \ = 'general_chat'\n\n    answer_mode = _choose_answer_mode(task_type, payload)\n\
+          \    multi_object_strategy = _choose_multi_object_strategy(answer_mode,\
+          \ task_type, payload)\n    answer_scope = _choose_answer_scope(answer_mode,\
+          \ task_type, payload)\n\n    business_tasks = VALID_TASK_TYPES - {'general_chat',\
+          \ 'image_answer', 'unknown'}\n    if task_type == 'general_chat':\n    \
+          \    route_group = 'general_chat'\n    elif task_type == 'image_answer':\n\
+          \        route_group = 'image_answer'\n    elif task_type in business_tasks:\n\
+          \        route_group = 'business_task'\n    else:\n        route_group =\
+          \ 'general_chat'\n\n    required_sources = payload.get('required_sources')\
+          \ if isinstance(payload.get('required_sources'), dict) else {}\n    required_agents\
+          \ = payload.get('required_agents') if isinstance(payload.get('required_agents'),\
+          \ dict) else {}\n    knowledge_policy = _clean(payload.get('knowledge_policy')).lower()\n\
+          \    if knowledge_policy not in VALID_KNOWLEDGE_POLICIES:\n        knowledge_policy\
+          \ = 'required' if _bool(required_sources.get('knowledge')) else 'none'\n\
+          \    knowledge_goal = _clean(payload.get('knowledge_goal'))\n\n    object_reference\
+          \ = _clean(payload.get('object_reference'))\n    resolution_status = _clean(payload.get('resolution_status')).lower()\n\
+          \    if resolution_status not in VALID_RESOLUTION_STATUSES:\n        resolution_status\
+          \ = ''\n    target = payload.get('target_object') if isinstance(payload.get('target_object'),\
+          \ dict) else {}\n    bound_target = _load_json(bound_object_json)\n    target_id\
+          \ = _clean(target.get('object_id') or target.get('objectId'))\n\n    if\
+          \ resolution_status == 'bound':\n        if not target and isinstance(bound_target,\
+          \ dict):\n            target = bound_target\n    elif resolution_status\
+          \ in ['ambiguous', 'not_found', 'missing']:\n        target = {}\n    elif\
+          \ resolution_status == 'resolved' and not target_id:\n        resolution_status\
+          \ = 'missing'\n        target = {}\n    elif not resolution_status:\n  \
+          \      if target_id:\n            resolution_status = 'resolved'\n     \
+          \   elif not object_reference and isinstance(bound_target, dict) and bound_target:\n\
+          \            target = bound_target\n            resolution_status = 'bound'\n\
+          \        elif object_reference:\n            resolution_status = 'missing'\n\
+          \            target = {}\n        else:\n            resolution_status =\
+          \ 'not_required'\n\n    if resolution_status in ['ambiguous', 'not_found',\
+          \ 'missing']:\n        task_type = 'object_query'\n        route_group =\
+          \ 'business_task'\n        answer_mode = 'detail_lookup'\n        multi_object_strategy\
+          \ = 'ask_clarification'\n        answer_scope = 'concise'\n        required_sources\
+          \ = {'crm': True, 'knowledge': False, 'external': False, 'attachment': False}\n\
+          \        required_agents = {'sales': False, 'finance': False, 'delivery':\
+          \ False, 'legal': False, 'analytics': False}\n        knowledge_policy =\
+          \ 'none'\n        knowledge_goal = ''\n\n    if task_type == 'object_query'\
+          \ and answer_mode in ['list_lookup', 'detail_lookup']:\n        required_sources['crm']\
+          \ = True\n        required_agents = {'sales': False, 'finance': False, 'delivery':\
+          \ False, 'legal': False, 'analytics': False}\n        knowledge_policy =\
+          \ 'none'\n        knowledge_goal = ''\n\n    if task_type == 'full_review':\n\
+          \        required_agents.update({'sales': True, 'finance': True, 'delivery':\
+          \ True, 'legal': True})\n\n    if task_type == 'object_query' and answer_mode\
+          \ in ['list_lookup', 'detail_lookup']:\n        agent_route = 'crm_light_answer'\n\
+          \    elif _bool(required_agents.get('sales')) and _bool(required_agents.get('finance'))\
           \ and _bool(required_agents.get('delivery')) and _bool(required_agents.get('legal')):\n\
           \        agent_route = 'full_review'\n    elif _bool(required_agents.get('finance')):\n\
           \        agent_route = 'finance'\n    elif _bool(required_agents.get('delivery')):\n\
@@ -1797,26 +1839,49 @@ workflow:
           \        agent_route = 'legal'\n    elif _bool(required_agents.get('analytics')):\n\
           \        agent_route = 'analytics'\n    elif _bool(required_agents.get('sales')):\n\
           \        agent_route = 'sales'\n    else:\n        agent_route = 'none'\n\
-          \n    return {\n        'task_type': task_type,\n        'route_group':\
-          \ route_group,\n        'target_object_json': json.dumps(target if isinstance(target,\
-          \ dict) else {}, ensure_ascii=False),\n        'need_crm': 'true' if _bool(required_sources.get('crm'))\
-          \ else 'false',\n        'need_knowledge': 'true' if _bool(required_sources.get('knowledge'))\
-          \ else 'false',\n        'need_external': 'true' if _bool(required_sources.get('external'))\
+          \n    direct_answer = _clean(payload.get('direct_answer')) if route_group\
+          \ == 'general_chat' else ''\n    knowledge_eligible = route_group == 'business_task'\
+          \ and knowledge_policy != 'none'\n\n    return {\n        'task_type': task_type,\n\
+          \        'route_group': route_group,\n        'object_reference': object_reference,\n\
+          \        'resolution_status': resolution_status,\n        'target_object_json':\
+          \ json.dumps(target if isinstance(target, dict) else {}, ensure_ascii=False),\n\
+          \        'need_crm': 'true' if _bool(required_sources.get('crm')) else 'false',\n\
+          \        'need_knowledge': 'true' if knowledge_eligible else 'false',\n\
+          \        'knowledge_policy': knowledge_policy,\n        'knowledge_goal':\
+          \ knowledge_goal,\n        'need_external': 'true' if _bool(required_sources.get('external'))\
           \ else 'false',\n        'need_attachment': 'true' if image_present or _bool(required_sources.get('attachment'))\
           \ else 'false',\n        'agent_route': agent_route,\n        'answer_mode':\
           \ answer_mode,\n        'multi_object_strategy': multi_object_strategy,\n\
           \        'answer_scope': answer_scope,\n        'answer_goal': _clean(payload.get('answer_goal')),\n\
-          \        'success_criteria_json': json.dumps(payload.get('success_criteria')\
-          \ or [], ensure_ascii=False),\n        'planner_reason': _clean(payload.get('reason')),\n\
-          \        'planner_confidence': str(payload.get('confidence') or ''),\n \
-          \   }"
+          \        'direct_answer': direct_answer,\n        'success_criteria_json':\
+          \ json.dumps(payload.get('success_criteria') or [], ensure_ascii=False),\n\
+          \        'planner_reason': _clean(payload.get('reason')),\n        'planner_confidence':\
+          \ str(payload.get('confidence') or ''),\n    }"
         code_language: python3
-        desc: 解析 Planner JSON，输出稳定任务路由和能力开关。
+        desc: 解析 Planner JSON，输出稳定任务路由、知识策略和能力开关。
         outputs:
           agent_route:
             children: null
             type: string
           answer_goal:
+            children: null
+            type: string
+          answer_mode:
+            children: null
+            type: string
+          answer_scope:
+            children: null
+            type: string
+          direct_answer:
+            children: null
+            type: string
+          knowledge_goal:
+            children: null
+            type: string
+          knowledge_policy:
+            children: null
+            type: string
+          multi_object_strategy:
             children: null
             type: string
           need_attachment:
@@ -1831,10 +1896,16 @@ workflow:
           need_knowledge:
             children: null
             type: string
+          object_reference:
+            children: null
+            type: string
           planner_confidence:
             children: null
             type: string
           planner_reason:
+            children: null
+            type: string
+          resolution_status:
             children: null
             type: string
           route_group:
@@ -1847,15 +1918,6 @@ workflow:
             children: null
             type: string
           task_type:
-            children: null
-            type: string
-          answer_mode:
-            children: null
-            type: string
-          answer_scope:
-            children: null
-            type: string
-          multi_object_strategy:
             children: null
             type: string
         selected: false
@@ -2074,27 +2136,62 @@ workflow:
       type: custom
       width: 242
     - data:
-        code: "import json\n\n\ndef _clean(value):\n    if value is None:\n      \
-          \  return ''\n    return str(value).strip()\n\n\ndef _loads(value, fallback):\n\
-          \    if isinstance(value, (dict, list)):\n        return value\n    text\
-          \ = _clean(value)\n    if not text:\n        return fallback\n    try:\n\
-          \        return json.loads(text)\n    except Exception:\n        return\
-          \ fallback\n\n\ndef _bool(value):\n    return _clean(value).lower() in ['true',\
-          \ '1', 'yes', 'y', '是', '需要']\n\n\ndef _relation_target(target):\n    return\
-          \ _clean(\n        target.get('relation_target')\n        or target.get('relationTarget')\n\
-          \        or target.get('target_relation')\n        or target.get('targetRelation')\n\
-          \    ).lower()\n\n\ndef _is_opportunity_relation(relation):\n    return\
-          \ relation in ['opportunity', 'opportunities', '商机', '商机列表', '关联商机']\n\n\
-          \ndef main(\n    task_type: str = '',\n    original_query: str = '',\n \
-          \   target_object_json: str = '',\n    need_crm: str = '',\n    need_knowledge:\
-          \ str = '',\n    need_external: str = '',\n    need_attachment: str = '',\n\
-          ) -> dict:\n    target = _loads(target_object_json, {})\n    object_type\
-          \ = _clean(target.get('object_type') or target.get('objectType'))\n    object_id\
-          \ = _clean(target.get('object_id') or target.get('objectId'))\n    object_name\
-          \ = _clean(target.get('object_name') or target.get('objectName'))\n    relation\
-          \ = _relation_target(target)\n    query = _clean(original_query)\n\n   \
-          \ endpoint = ''\n    payload = {}\n    action = 'none'\n    if _bool(need_crm):\n\
-          \        if object_type == 'customer' and _is_opportunity_relation(relation):\n\
+        answer: '{{#image_answer.text#}}'
+        desc: 图片理解结果直接流式输出。
+        selected: false
+        title: 输出图片回答
+        type: answer
+        variables:
+        - value_selector:
+          - image_answer
+          - text
+          variable: text
+      height: 131
+      id: image_answer_stream
+      position:
+        x: 8428
+        y: 341.21307255631666
+      positionAbsolute:
+        x: 8428
+        y: 341.21307255631666
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+    - data:
+        code: "import json\n\n\nVALID_KNOWLEDGE_POLICIES = {'none', 'required', 'conditional'}\n\
+          \n\ndef _clean(value):\n    if value is None:\n        return ''\n    return\
+          \ str(value).strip()\n\n\ndef _loads(value, fallback):\n    if isinstance(value,\
+          \ (dict, list)):\n        return value\n    text = _clean(value)\n    if\
+          \ not text:\n        return fallback\n    try:\n        return json.loads(text)\n\
+          \    except Exception:\n        return fallback\n\n\ndef _bool(value):\n\
+          \    return _clean(value).lower() in ['true', '1', 'yes', 'y', '是', '需要']\n\
+          \n\ndef _relation_target(target):\n    return _clean(\n        target.get('relation_target')\n\
+          \        or target.get('relationTarget')\n        or target.get('target_relation')\n\
+          \        or target.get('targetRelation')\n    ).lower()\n\n\ndef _is_opportunity_relation(relation):\n\
+          \    return relation in ['opportunity', 'opportunities', '商机', '商机列表', '关联商机']\n\
+          \n\ndef _is_customer_relation(relation):\n    return relation in ['customer',\
+          \ 'customers', '客户', '客户列表', '关联客户']\n\n\ndef main(\n    task_type: str\
+          \ = '',\n    original_query: str = '',\n    target_object_json: str = '',\n\
+          \    object_reference: str = '',\n    resolution_status: str = '',\n   \
+          \ need_crm: str = '',\n    need_knowledge: str = '',\n    knowledge_policy:\
+          \ str = '',\n    knowledge_goal: str = '',\n    need_external: str = '',\n\
+          \    need_attachment: str = '',\n) -> dict:\n    target = _loads(target_object_json,\
+          \ {})\n    object_type = _clean(target.get('object_type') or target.get('objectType'))\n\
+          \    object_id = _clean(target.get('object_id') or target.get('objectId'))\n\
+          \    object_name = _clean(target.get('object_name') or target.get('objectName'))\n\
+          \    relation = _relation_target(target)\n    query = _clean(original_query)\n\
+          \    reference = _clean(object_reference)\n    resolution = _clean(resolution_status).lower()\n\
+          \n    policy = _clean(knowledge_policy).lower()\n    if policy not in VALID_KNOWLEDGE_POLICIES:\n\
+          \        policy = 'required' if _bool(need_knowledge) else 'none'\n\n  \
+          \  endpoint = ''\n    payload = {}\n    action = 'none'\n    if _bool(need_crm):\n\
+          \        if resolution in ['ambiguous', 'not_found', 'missing'] and reference:\n\
+          \            endpoint = 'resolve-crm-object'\n            action = 'resolve_crm_object'\n\
+          \            payload = {'objectReference': reference, 'limit': 10}\n   \
+          \     elif _clean(task_type) == 'stats_analysis':\n            endpoint\
+          \ = 'get-funnel-snapshot'\n            action = 'get_funnel_snapshot'\n\
+          \            payload = {}\n        elif object_type == 'customer' and _is_opportunity_relation(relation):\n\
           \            endpoint = 'search-opportunities'\n            action = 'search_opportunities'\n\
           \            payload = {'keyword': object_name or query[:80], 'limit': 10,\
           \ 'includeContextOnUnique': False}\n        elif object_type == 'opportunity'\
@@ -2103,29 +2200,28 @@ workflow:
           \ object_id, 'limit': 10}\n        elif object_type == 'customer' and object_id:\n\
           \            endpoint = 'get-customer-context'\n            action = 'get_customer_context'\n\
           \            payload = {'customerId': object_id, 'limit': 10}\n        elif\
-          \ _clean(task_type) == 'stats_analysis':\n            endpoint = 'get-funnel-snapshot'\n\
-          \            action = 'get_funnel_snapshot'\n            payload = {}\n\
-          \        elif object_name:\n            search_opportunity = _is_opportunity_relation(relation)\
-          \ or any(word in (object_name + ' ' + query).lower() for word in ['商机',\
-          \ '项目', '机会', '报价', 'deal', 'opportunity'])\n            endpoint = 'search-opportunities'\
-          \ if search_opportunity else 'search-customers'\n            action = 'search_opportunities'\
-          \ if search_opportunity else 'search_customers'\n            payload = {'keyword':\
-          \ object_name, 'limit': 5, 'includeContextOnUnique': not search_opportunity}\n\
-          \        elif query:\n            endpoint = 'search-customers'\n      \
-          \      action = 'search_customers'\n            payload = {'keyword': query[:80],\
-          \ 'limit': 5, 'includeContextOnUnique': True}\n\n    return {\n        'need_crm':\
-          \ 'true' if endpoint else 'false',\n        'need_knowledge': 'true' if\
-          \ _bool(need_knowledge) else 'false',\n        'need_external': 'true' if\
-          \ _bool(need_external) else 'false',\n        'need_attachment': 'true'\
+          \ _is_opportunity_relation(relation):\n            endpoint = 'search-opportunities'\n\
+          \            action = 'search_opportunities'\n            payload = {'keyword':\
+          \ object_name or query[:80], 'limit': 10, 'includeContextOnUnique': False}\n\
+          \        elif _is_customer_relation(relation):\n            endpoint = 'search-customers'\n\
+          \            action = 'search_customers'\n            payload = {'keyword':\
+          \ object_name or query[:80], 'limit': 10, 'includeContextOnUnique': False}\n\
+          \        elif object_name:\n            endpoint = 'resolve-crm-object'\n\
+          \            action = 'resolve_crm_object'\n            payload = {'objectReference':\
+          \ object_name, 'limit': 10}\n\n    return {\n        'need_crm': 'true'\
+          \ if endpoint else 'false',\n        'need_knowledge': 'true' if policy\
+          \ != 'none' else 'false',\n        'knowledge_policy': policy,\n       \
+          \ 'knowledge_goal': _clean(knowledge_goal),\n        'need_external': 'true'\
+          \ if _bool(need_external) else 'false',\n        'need_attachment': 'true'\
           \ if _bool(need_attachment) else 'false',\n        'crm_action': action,\n\
           \        'crm_tool_url_path': '/' + endpoint if endpoint else '',\n    \
           \    'crm_request_body': json.dumps(payload, ensure_ascii=False),\n    \
           \    'evidence_plan_text': '; '.join([\n            f\"task_type={_clean(task_type)}\"\
-          ,\n            f\"crm={action}\",\n            f\"knowledge={_bool(need_knowledge)}\"\
+          ,\n            f\"crm={action}\",\n            f\"knowledge_policy={policy}\"\
           ,\n            f\"external={_bool(need_external)}\",\n            f\"attachment={_bool(need_attachment)}\"\
           ,\n        ]),\n    }"
         code_language: python3
-        desc: 按任务计划决定 CRM、知识库、外部情报和附件证据是否启用。
+        desc: 并行调度 CRM、外部情报和附件证据，并传递 Planner 的知识检索策略。
         outputs:
           crm_action:
             children: null
@@ -2137,6 +2233,12 @@ workflow:
             children: null
             type: string
           evidence_plan_text:
+            children: null
+            type: string
+          knowledge_goal:
+            children: null
+            type: string
+          knowledge_policy:
             children: null
             type: string
           need_attachment:
@@ -2169,6 +2271,14 @@ workflow:
           variable: target_object_json
         - value_selector:
           - task_plan_normalize
+          - object_reference
+          variable: object_reference
+        - value_selector:
+          - task_plan_normalize
+          - resolution_status
+          variable: resolution_status
+        - value_selector:
+          - task_plan_normalize
           - need_crm
           variable: need_crm
         - value_selector:
@@ -2183,6 +2293,14 @@ workflow:
           - task_plan_normalize
           - need_attachment
           variable: need_attachment
+        - value_selector:
+          - task_plan_normalize
+          - knowledge_policy
+          variable: knowledge_policy
+        - value_selector:
+          - task_plan_normalize
+          - knowledge_goal
+          variable: knowledge_goal
       height: 96
       id: evidence_router
       position:
@@ -2370,21 +2488,38 @@ workflow:
           \ code == 'OK' or (code == 'OBJECT_AMBIGUOUS' and candidates):\n       \
           \ tool_status = 'ok'\n    else:\n        tool_status = 'error'\n       \
           \ tool_errors.append(message or f'CRM 工具返回 {code}')\n\n    if data and (tool_status\
-          \ == 'ok' or candidates):\n        facts.append(json.dumps(data, ensure_ascii=False)[:3500])\n\
-          \        if isinstance(data.get('chart'), dict):\n            charts.append(data.get('chart'))\n\
-          \        progress_chart = _single_deal_progress_chart(data)\n        if\
-          \ progress_chart:\n            charts.append(progress_chart)\n        if\
-          \ isinstance(data.get('customer'), dict):\n            cust = data.get('customer')\
-          \ or {}\n            objects.append({'objectType': 'customer', 'objectId':\
-          \ _clean(cust.get('id')), 'objectName': _clean(cust.get('name'))})\n   \
-          \     if isinstance(data.get('opportunity'), dict):\n            opp = data.get('opportunity')\
-          \ or {}\n            objects.append({'objectType': 'opportunity', 'objectId':\
-          \ _clean(opp.get('id')), 'objectName': _clean(opp.get('name'))})\n     \
-          \   for item in candidates[:10]:\n            if isinstance(item, dict):\n\
-          \                object_type = 'opportunity_candidate' if _clean(crm_action)\
-          \ == 'search_opportunities' else 'customer_candidate'\n                objects.append({\n\
-          \                    'objectType': object_type,\n                    'objectId':\
-          \ _clean(item.get('id')),\n                    'objectName': _clean(item.get('name')),\n\
+          \ == 'ok' or candidates):\n        fact_data = {}\n        for key in [\n\
+          \            'opportunity', 'customer', 'opportunities', 'contacts',\n \
+          \           'recentFollowRecords', 'openFollowPlans', 'businessFacts',\n\
+          \            'dealTerms', 'riskSignals', 'missingFields', 'sourceRefs',\n\
+          \            'funnelSnapshot', 'stats', 'summary',\n        ]:\n       \
+          \     value = data.get(key)\n            if isinstance(value, list):\n \
+          \               fact_data[key] = value[:10]\n            elif value is not\
+          \ None:\n                fact_data[key] = value\n        facts.append(json.dumps(fact_data\
+          \ or data, ensure_ascii=False))\n        if isinstance(data.get('chart'),\
+          \ dict):\n            charts.append(data.get('chart'))\n        progress_chart\
+          \ = _single_deal_progress_chart(data)\n        if progress_chart:\n    \
+          \        charts.append(progress_chart)\n        if isinstance(data.get('customer'),\
+          \ dict):\n            cust = data.get('customer') or {}\n            objects.append({'objectType':\
+          \ 'customer', 'objectId': _clean(cust.get('id')), 'objectName': _clean(cust.get('name'))})\n\
+          \        if isinstance(data.get('opportunity'), dict):\n            opp\
+          \ = data.get('opportunity') or {}\n            objects.append({'objectType':\
+          \ 'opportunity', 'objectId': _clean(opp.get('id')), 'objectName': _clean(opp.get('name'))})\n\
+          \        if isinstance(data.get('resolvedObject'), dict):\n            resolved\
+          \ = data.get('resolvedObject') or {}\n            objects.append({\n   \
+          \             'objectType': _clean(resolved.get('objectType') or resolved.get('type')),\n\
+          \                'objectId': _clean(resolved.get('objectId') or resolved.get('id')),\n\
+          \                'objectName': _clean(resolved.get('objectName') or resolved.get('name')),\n\
+          \                'customerId': _clean(resolved.get('customerId')),\n   \
+          \             'customerName': _clean(resolved.get('customerName')),\n  \
+          \              'source': _clean(resolved.get('source')) or 'crm_resolver',\n\
+          \            })\n        for item in candidates[:10]:\n            if isinstance(item,\
+          \ dict):\n                object_type = _clean(item.get('objectType'))\n\
+          \                if not object_type:\n                    object_type =\
+          \ 'opportunity' if _clean(crm_action) == 'search_opportunities' else 'customer'\n\
+          \                objects.append({\n                    'objectType': object_type,\n\
+          \                    'objectId': _clean(item.get('objectId') or item.get('id')),\n\
+          \                    'objectName': _clean(item.get('objectName') or item.get('name')),\n\
           \                    'customerName': _clean(item.get('customerName')),\n\
           \                })\n    elif tool_status != 'skipped' and not tool_errors:\n\
           \        gaps.append('CRM 工具未返回可展示数据。')\n\n    evidence = {\n        'source':\
@@ -2433,80 +2568,120 @@ workflow:
         - case_id: need_knowledge
           conditions:
           - comparison_operator: contains
-            id: cond_knowledge_gate_need_knowledge
+            id: cond_knowledge_gate_decision
             value: 'true'
             varType: string
             variable_selector:
-            - evidence_router
+            - query_rewrite
             - need_knowledge
           id: need_knowledge
           logical_operator: and
-        desc: 按需召回销售、财务、交付、合同规则。
+        desc: 根据证据化决策结果执行或跳过知识库检索。
         selected: false
-        title: 是否检索知识库
+        title: 是否执行知识库检索
         type: if-else
       height: 192
       id: knowledge_gate
       position:
-        x: 4184
-        y: 1155.6666666666667
+        x: 5230
+        y: 1090
       positionAbsolute:
-        x: 4184
-        y: 1155.6666666666667
+        x: 5230
+        y: 1090
       selected: false
       sourcePosition: right
       targetPosition: left
       type: custom
       width: 242
     - data:
-        code: "\nimport re\n\n\nMAX_CHARS = 260\nTASK_TERMS = {\n    'full_review':\
-          \ '商机评审 销售 财务 交付 合同 风险 下一步动作',\n    'finance_check': '付款 首付 尾款 账期 回款 折扣\
-          \ 财务风险',\n    'delivery_check': '上线周期 交付范围 资源 验收 交付风险',\n    'legal_check':\
-          \ '合同条款 验收 赔付 责任边界 数据安全',\n    'sales_assist': '销售推进 决策链 客户意向 跟进动作',\n \
-          \   'followup_plan': '跟进计划 动作 负责人 时间建议',\n    'progress_summary': '商机进展\
-          \ 已确认事实 风险 下一步',\n    'content_draft': '沟通话术 邮件 微信 客户沟通',\n    'stats_analysis':\
-          \ '销售漏斗 阶段转化 赢单率 经营分析',\n}\n\n\ndef _clean(value):\n    if value is None:\n\
-          \        return ''\n    return re.sub(r'\\s+', ' ', str(value)).strip()\n\
-          \n\ndef _shorten(text, limit):\n    text = _clean(text)\n    return text\
-          \ if len(text) <= limit else text[:limit]\n\n\ndef main(original_query:\
-          \ str = '', task_type: str = '', answer_goal: str = '') -> dict:\n    task\
-          \ = _clean(task_type)\n    parts = [\n        _shorten(original_query, 120),\n\
-          \        TASK_TERMS.get(task, ''),\n        _shorten(answer_goal, 80),\n\
-          \    ]\n    seen = set()\n    tokens = []\n    for part in parts:\n    \
-          \    for token in re.split(r'[，。；;、\\s]+', part):\n            token = _clean(token)\n\
-          \            if not token or token in seen:\n                continue\n\
-          \            seen.add(token)\n            tokens.append(token)\n    query\
-          \ = ' '.join(tokens)\n    return {'text': query[:MAX_CHARS]}\n"
+        code: "import json\nimport re\n\n\nMAX_CHARS = 260\nVALID_POLICIES = {'none',\
+          \ 'required', 'conditional'}\nVALID_DOMAINS = {'sales', 'finance', 'delivery',\
+          \ 'legal', 'general'}\n\n\ndef _clean(value):\n    if value is None:\n \
+          \       return ''\n    return re.sub(r'\\s+', ' ', str(value)).strip()\n\
+          \n\ndef _load_json(text):\n    text = _clean(text)\n    if not text:\n \
+          \       return {}\n    try:\n        return json.loads(text)\n    except\
+          \ Exception:\n        match = re.search(r'\\{.*\\}', text, flags=re.S)\n\
+          \        if not match:\n            return {}\n        try:\n          \
+          \  return json.loads(match.group(0))\n        except Exception:\n      \
+          \      return {}\n\n\ndef _bool(value):\n    if isinstance(value, bool):\n\
+          \        return value\n    return _clean(value).lower() in ['true', '1',\
+          \ 'yes', 'y', '是', '需要']\n\n\ndef _string_list(value, allowed=None, limit=8):\n\
+          \    if not isinstance(value, list):\n        return []\n    result = []\n\
+          \    for item in value:\n        text = _clean(item)\n        if not text\
+          \ or (allowed and text not in allowed) or text in result:\n            continue\n\
+          \        result.append(text)\n        if len(result) >= limit:\n       \
+          \     break\n    return result\n\n\ndef main(\n    decision_text: str =\
+          \ '',\n    knowledge_policy: str = '',\n    original_query: str = '',\n\
+          \    knowledge_goal: str = '',\n    answer_goal: str = '',\n) -> dict:\n\
+          \    payload = _load_json(decision_text)\n    policy = _clean(knowledge_policy).lower()\n\
+          \    if policy not in VALID_POLICIES:\n        policy = 'none'\n\n    if\
+          \ policy == 'required':\n        need_knowledge = True\n    elif policy\
+          \ == 'conditional':\n        need_knowledge = _bool(payload.get('need_knowledge'))\
+          \ if payload else bool(_clean(knowledge_goal))\n    else:\n        need_knowledge\
+          \ = False\n\n    focus_domains = _string_list(payload.get('focus_domains'),\
+          \ VALID_DOMAINS, 5)\n    facts_used = _string_list(payload.get('facts_used'),\
+          \ None, 6)\n    reason = _clean(payload.get('reason'))[:160]\n    query\
+          \ = _clean(payload.get('knowledge_query'))\n    if need_knowledge and not\
+          \ query:\n        query = _clean(' '.join(filter(None, [original_query,\
+          \ knowledge_goal, answer_goal, ' '.join(facts_used)])))\n        if not\
+          \ payload:\n            reason = reason or '知识检索决策输出不可解析，已按 Planner 策略生成降级查询'\n\
+          \    if not need_knowledge:\n        query = ''\n\n    if need_knowledge\
+          \ and not query:\n        need_knowledge = False\n        reason = reason\
+          \ or '没有形成可执行的知识检索问题'\n\n    return {\n        'need_knowledge': 'true'\
+          \ if need_knowledge else 'false',\n        'text': query[:MAX_CHARS],\n\
+          \        'focus_domains_json': json.dumps(focus_domains, ensure_ascii=False),\n\
+          \        'facts_used_json': json.dumps(facts_used, ensure_ascii=False),\n\
+          \        'reason': reason,\n    }"
         code_language: python3
-        desc: 用稳定代码生成短检索串，避免 LLM 改写失控导致知识库查询超长。
+        desc: 校验模型 JSON、落实 required/conditional/none 策略并限制单条查询不超过 260 字符；不使用固定业务词表。
         outputs:
+          facts_used_json:
+            children: null
+            type: string
+          focus_domains_json:
+            children: null
+            type: string
+          need_knowledge:
+            children: null
+            type: string
+          reason:
+            children: null
+            type: string
           text:
             children: null
             type: string
         selected: false
-        title: 规则检索查询改写
+        title: 知识检索结果校验
         type: code
         variables:
+        - value_selector:
+          - knowledge_query_decider
+          - text
+          variable: decision_text
+        - value_selector:
+          - evidence_router
+          - knowledge_policy
+          variable: knowledge_policy
         - value_selector:
           - conversation_context
           - original_query
           variable: original_query
         - value_selector:
-          - task_plan_normalize
-          - task_type
-          variable: task_type
+          - evidence_router
+          - knowledge_goal
+          variable: knowledge_goal
         - value_selector:
           - task_plan_normalize
           - answer_goal
           variable: answer_goal
-      height: 96
+      height: 128
       id: query_rewrite
       position:
-        x: 4546
-        y: 1084.1666666666667
+        x: 4888
+        y: 1010
       positionAbsolute:
-        x: 4546
-        y: 1084.1666666666667
+        x: 4888
+        y: 1010
       selected: false
       sourcePosition: right
       targetPosition: left
@@ -2514,15 +2689,21 @@ workflow:
       width: 242
     - data:
         dataset_ids:
-        - BML2bFmj4nFK3/tLcrM6LSpPvsDzIgQCoocG87E31Ba7gh7sTcuWTtCkP/Liubu5
-        desc: 检索 AI Deal Desk 规则知识库。本 YAML 已预置 dataset_ids（BML2bFmj4nFK3/tLcrM6LSpPvsDzIgQCoocG87E31Ba7gh7sTcuWTtCkP/Liubu5），导入后请确认目标
-          Dify 工作区拥有该知识库；如未拥有或需重绑，请在 Dify 节点中显式绑定“AI Deal Desk 规则知识库 - Dify 单页版”。检索配置建议：混合检索
-          + Qwen/Qwen3-Reranker-8B + Top K 8 + 关闭 Score 阈值。
+        - replace-with-your-dataset-id
+        desc: 检索 AI Deal Desk 规则知识库。阶段 1 基线：高质量索引、BAAI/bge-m3、混合检索、Qwen/Qwen3-Reranker-4B、Top
+          K 8、关闭 Score 阈值；导入后请确认数据集仍为当前已完成索引的数据集。
+        multiple_retrieval_config:
+          reranking_enable: true
+          reranking_mode: reranking_model
+          reranking_model:
+            model: Qwen/Qwen3-Reranker-4B
+            provider: langgenius/siliconflow/siliconflow
+          top_k: 8
         query_attachment_selector: []
         query_variable_selector:
         - query_rewrite
         - text
-        retrieval_mode: single
+        retrieval_mode: multiple
         selected: false
         single_retrieval_config:
           model:
@@ -2532,46 +2713,46 @@ workflow:
             provider: langgenius/openai/openai
         title: 知识库检索
         type: knowledge-retrieval
-      height: 278
+      height: 198
       id: deal_rules_knowledge
       position:
-        x: 4888
-        y: 1109.1666666666667
+        x: 5572
+        y: 990
       positionAbsolute:
-        x: 4888
-        y: 1109.1666666666667
+        x: 5572
+        y: 990
       selected: false
       sourcePosition: right
       targetPosition: left
       type: custom
       width: 242
     - data:
-        code: "def main() -> dict:\n    return {'output': '[]'}\n"
+        code: "def main() -> dict:\n    return {'output': 'evidence_decision_not_needed'}\n"
         code_language: python3
-        desc: 未启用知识库时输出空数组。
+        desc: conditional 策略经 CRM/附件证据判断无需知识库时输出跳过标记。
         outputs:
           output:
             children: null
             type: string
         selected: false
-        title: 知识库跳过响应
+        title: 证据判断后跳过知识库
         type: code
         variables: []
-      height: 80
+      height: 96
       id: knowledge_skip
       position:
-        x: 4888
-        y: 1339.1666666666667
+        x: 5572
+        y: 1230
       positionAbsolute:
-        x: 4888
-        y: 1339.1666666666667
+        x: 5572
+        y: 1230
       selected: false
       sourcePosition: right
       targetPosition: left
       type: custom
       width: 242
     - data:
-        desc: 汇合知识库召回或跳过响应。
+        desc: 汇合知识库召回、Planner 直接跳过或证据判断后跳过响应。
         output_type: string
         selected: false
         title: 知识库结果汇合
@@ -2581,38 +2762,57 @@ workflow:
           - result
         - - knowledge_skip
           - output
-      height: 162
+        - - knowledge_policy_skip
+          - output
+      height: 204
       id: knowledge_merge
       position:
-        x: 5250
-        y: 1257.5
+        x: 5934
+        y: 1130
       positionAbsolute:
-        x: 5250
-        y: 1257.5
+        x: 5934
+        y: 1130
       selected: false
       sourcePosition: right
       targetPosition: left
       type: custom
       width: 242
     - data:
-        code: "\nimport json\n\n\ndef _clean(value):\n    if value is None:\n    \
-          \    return ''\n    return str(value).strip()\n\n\ndef _loads(value, fallback):\n\
-          \    if isinstance(value, (dict, list)):\n        return value\n    text\
-          \ = _clean(value)\n    if not text:\n        return fallback\n    try:\n\
-          \        return json.loads(text)\n    except Exception:\n        return\
-          \ fallback\n\n\ndef main(knowledge_result=None, skipped: str = '') -> dict:\n\
-          \    rules = []\n    gaps = []\n    if _clean(skipped):\n        gaps.append('本轮未检索知识库规则。')\n\
-          \    items = knowledge_result if isinstance(knowledge_result, list) else\
-          \ []\n    for item in items[:8]:\n        if not isinstance(item, dict):\n\
-          \            continue\n        title = _clean(item.get('title'))\n     \
-          \   content = _clean(item.get('content'))\n        if title or content:\n\
-          \            rules.append({'title': title, 'content': content[:800], 'url':\
-          \ _clean(item.get('url'))})\n    if not rules and not gaps:\n        gaps.append('未召回直接相关的知识库规则。')\n\
-          \    evidence = {'source': 'knowledge', 'rules': rules, 'gaps': gaps, 'tool_errors':\
-          \ []}\n    return {'evidence_json': json.dumps(evidence, ensure_ascii=False),\
-          \ 'evidence_text': json.dumps(evidence, ensure_ascii=False)}\n"
+        code: "import json\n\n\ndef _clean(value):\n    if value is None:\n      \
+          \  return ''\n    return str(value).strip()\n\n\ndef _score(item, metadata):\n\
+          \    value = item.get('score')\n    if value is None and isinstance(metadata,\
+          \ dict):\n        value = metadata.get('score')\n    try:\n        return\
+          \ round(float(value), 6)\n    except Exception:\n        return None\n\n\
+          \ndef main(\n    knowledge_result=None,\n    decision_skipped: str = '',\n\
+          \    policy_skipped: str = '',\n    query_text: str = '',\n) -> dict:\n\
+          \    rules = []\n    gaps = []\n    retrieval_status = 'completed'\n   \
+          \ skip_reason = ''\n\n    if _clean(policy_skipped):\n        retrieval_status\
+          \ = 'not_required'\n        skip_reason = 'planner_policy_none'\n    elif\
+          \ _clean(decision_skipped):\n        retrieval_status = 'not_required'\n\
+          \        skip_reason = 'evidence_decision_not_needed'\n\n    items = knowledge_result\
+          \ if isinstance(knowledge_result, list) else []\n    seen = set()\n    for\
+          \ item in items:\n        if not isinstance(item, dict):\n            continue\n\
+          \        metadata = item.get('metadata') if isinstance(item.get('metadata'),\
+          \ dict) else {}\n        title = _clean(item.get('title') or metadata.get('document_name')\
+          \ or metadata.get('name'))\n        content = _clean(item.get('content')\
+          \ or item.get('text'))\n        source = _clean(\n            item.get('url')\n\
+          \            or metadata.get('source_url')\n            or metadata.get('document_name')\n\
+          \            or metadata.get('data_source_type')\n        )\n        key\
+          \ = (title.lower(), ' '.join(content.lower().split())[:240])\n        if\
+          \ not (title or content) or key in seen:\n            continue\n       \
+          \ seen.add(key)\n        rules.append({\n            'title': title,\n \
+          \           'content': content[:800],\n            'relevance': _score(item,\
+          \ metadata),\n            'source': source,\n            'url': _clean(item.get('url')),\n\
+          \        })\n        if len(rules) >= 8:\n            break\n\n    if retrieval_status\
+          \ == 'completed' and not rules:\n        gaps.append('知识库已执行检索，但未召回直接相关规则。')\n\
+          \n    evidence = {\n        'source': 'knowledge',\n        'retrieval_status':\
+          \ retrieval_status,\n        'query': _clean(query_text),\n        'skip_reason':\
+          \ skip_reason,\n        'rules': rules,\n        'gaps': gaps,\n       \
+          \ 'tool_errors': [],\n    }\n    return {\n        'evidence_json': json.dumps(evidence,\
+          \ ensure_ascii=False),\n        'evidence_text': json.dumps(evidence, ensure_ascii=False),\n\
+          \    }"
         code_language: python3
-        desc: 把召回规则整理为统一证据包。
+        desc: 整理最多 8 条去重规则，保留规则标题、正文、相关度、来源、实际查询与跳过状态。
         outputs:
           evidence_json:
             children: null
@@ -2631,15 +2831,175 @@ workflow:
         - value_selector:
           - knowledge_skip
           - output
-          variable: skipped
-      height: 80
+          variable: decision_skipped
+        - value_selector:
+          - knowledge_policy_skip
+          - output
+          variable: policy_skipped
+        - value_selector:
+          - query_rewrite
+          - text
+          variable: query_text
+      height: 112
       id: knowledge_evidence
       position:
-        x: 5592
-        y: 1272.5
+        x: 6276
+        y: 1130
       positionAbsolute:
-        x: 5592
-        y: 1272.5
+        x: 6276
+        y: 1130
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+    - data:
+        cases:
+        - case_id: need_knowledge
+          conditions:
+          - comparison_operator: contains
+            id: cond_knowledge_policy_gate
+            value: 'true'
+            varType: string
+            variable_selector:
+            - evidence_router
+            - need_knowledge
+          id: need_knowledge
+          logical_operator: and
+        desc: CRM 与附件证据就绪后检查 Planner 策略；none 直接跳过，required 或 conditional 才调用知识决策模型。
+        selected: false
+        title: 是否进入知识检索决策
+        type: if-else
+      height: 208
+      id: knowledge_policy_gate
+      position:
+        x: 4184
+        y: 1080
+      positionAbsolute:
+        x: 4184
+        y: 1080
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+    - data:
+        context:
+          enabled: false
+          variable_selector: []
+        desc: 读取用户目标、CRM 与附件证据，语义判断是否需要知识库并生成单条事实化检索问题。
+        memory:
+          query_prompt_template: ''
+          role_prefix:
+            assistant: ''
+            user: ''
+          window:
+            enabled: false
+            size: 5
+        model:
+          completion_params:
+            enable_thinking: false
+            max_tokens: 500
+            temperature: 0.1
+          mode: chat
+          name: kk
+          provider: langgenius/openai_api_compatible/openai_api_compatible
+        prompt_template:
+        - id: knowledge-query-decision-system
+          role: system
+          text: '你是 AI Deal Desk 的知识检索决策器。你的任务不是回答用户，而是基于用户目标、Planner 策略、CRM 证据和附件证据，决定是否需要查询内部规则知识库，并生成一条高质量检索问题。
+
+
+            判断原则：
+
+            - 必须按语义和证据判断，禁止使用关键词命中、固定任务词表或机械评分。
+
+            - policy=required 时 need_knowledge 必须为 true；policy=conditional 时根据现有事实判断；policy=none
+            不会进入本节点。
+
+            - 当回答需要内部政策、业务基线、审批要求、风险规则、责任边界或动作准入条件，而现有 CRM/附件事实不能自行给出这些依据时，适合检索。
+
+            - 当用户只要 CRM 事实、普通总结，或现有证据已足以完成目标且引入规则不会提升结论时，可以不检索。
+
+            - knowledge_query 只能有一条，最多 260 个字符。它是面向规则召回的“关键业务事实 + 待查规则主题”，不是面向人的任务复述或评审报告标题。
+
+            - 只保留会改变规则适用性的事实。优先考虑金额、折扣、首付/账期/付款节点、交付周期与范围、验收条件、退款/赔付、数据安全和责任边界；没有出现的事实不要补写。
+
+            - 客户名、商机名、负责人、联系人、普通销售阶段和泛化标签通常不影响通用规则召回，不要写入 knowledge_query；只有某项规则的适用性确实依赖该信息时才保留。
+
+            - 完整评审需要兼顾多个领域时，选择各领域最有区分度的真实条件，不要让商机背景、阶段或某一个领域的长句挤占其他领域的关键条件。合同与验收已有事实时，优先保留验收样本、试运行周期、退款条件、延期赔付和赔付上限等原始业务表述，不要仅概括成“验收边界”或“合同风险”。
+
+            - 对尚未确认的条件必须保留“客户备选诉求、若坚持、可能”等不确定性，不得改写为已确认条款。
+
+            - 不要复制整份 CRM JSON，不要堆通用词、任务类型或内部节点标签，不要编造缺失数据。
+
+            - facts_used 只列实际用于形成查询的事实；focus_domains 只能从 sales、finance、delivery、legal、general
+            中选择。
+
+
+            只能输出一个 JSON 对象，不要 Markdown、代码块或解释：
+
+            {"need_knowledge":true,"knowledge_query":"","focus_domains":[],"facts_used":[],"reason":""}'
+        - id: knowledge-query-decision-user
+          role: user
+          text: '用户原始问题：{{#conversation_context.original_query#}}
+
+            回答目标：{{#task_plan_normalize.answer_goal#}}
+
+            知识目标：{{#evidence_router.knowledge_goal#}}
+
+            Planner 策略：{{#evidence_router.knowledge_policy#}}
+
+            任务类型：{{#task_plan_normalize.task_type#}}
+
+
+            CRM 证据：
+
+            {{#knowledge_context_prepare.crm_evidence_json#}}
+
+
+            附件证据：
+
+            {{#knowledge_context_prepare.attachment_evidence_json#}}'
+        selected: false
+        title: 知识检索决策与查询生成
+        type: llm
+        variables: []
+        vision:
+          enabled: false
+      height: 148
+      id: knowledge_query_decider
+      position:
+        x: 4546
+        y: 1010
+      positionAbsolute:
+        x: 4546
+        y: 1010
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+    - data:
+        code: "def main() -> dict:\n    return {'output': 'planner_policy_none'}\n"
+        code_language: python3
+        desc: Planner 明确选择 none 时直接跳过，不调用知识检索决策模型。
+        outputs:
+          output:
+            children: null
+            type: string
+        selected: false
+        title: Planner 判定无需知识库
+        type: code
+        variables: []
+      height: 96
+      id: knowledge_policy_skip
+      position:
+        x: 4546
+        y: 1340
+      positionAbsolute:
+        x: 4546
+        y: 1340
       selected: false
       sourcePosition: right
       targetPosition: left
@@ -2689,14 +3049,25 @@ workflow:
 
               - 普通 CRM 字段查询、商机金额/阶段/负责人/跟进记录、写回确认、图片内容解释、简单概念说明，不要调用联网工具，直接输出空字符串。
 
-              - 如需搜索，优先调用 current_time 获取当前时间，再调用 Tavily Search。默认只搜索 1 次；只有首次结果明显偏题时，才换关键词再搜索
-              1 次。
+              - 如需搜索，优先调用 current_time 获取当前时间，再调用 Tavily Search。最多搜索 2 次：第一次围绕主体和核心问题做较宽的高质量检索；首次候选明显偏题、来源权威性不足或缺少关键事实时，第二次改用不同的信息角度补充，不得只是重复同一句查询。
+
+              - Tavily 每次返回的是候选池，不是最终引用数量。先从每次最多 10 条候选中筛选，最终只保留 3-5 个最能直接支持结论的来源；不要因为最终只需
+              3-5 条就缩窄搜索词或过早停止。
+
+              - 查询词使用自然语言描述“主体 + 待核实事实 + 时间范围”，不要写 Google 风格的 site:、OR 或堆砌关键词。需要限定官网时使用
+              include_domains；设置 include_domains 后，query 中不得再次写 site:。除非用户明确只查新闻事件，否则官网产品动态、公告、博客、报告和帮助文档优先使用
+              topic=general，不要一律使用 topic=news。
+
+              - 用户给出最近 N 天/月/年或明确日期范围时，根据 current_time 计算并填写 start_date 与 end_date，不要同时依赖含义较松的
+              time_range；没有时间要求时不虚构日期范围。
+
+              - 选择来源时优先官方原始页面、政府、权威研究机构或可靠媒体。Tavily 的相关度分数只表示文本相关，不代表来源权威，也不代表发布日期可靠。
 
               - Tavily Search 返回的 title、url、content 已经足够形成初步判断时，必须直接输出摘要，不要再调用 Tavily
               Extract。
 
-              - 只有当搜索结果明确相关、但 content 片段不足以判断关键事实时，才调用 Tavily Extract，最多抽取 1 个最相关
-              URL。调用 Extract 后必须输出最终摘要，不要继续搜索或继续抽取。
+              - 搜索结果明确相关，但 content 片段不足以判断关键事实、实际发布方或发布日期时，才调用 Tavily Extract，最多抽取
+              1 个最相关 URL。调用 Extract 后必须输出最终摘要，不要继续搜索或继续抽取。
 
               - 不要抓取与当前客户、商机、行业或风险无关的网页；不要为了显得全面而扩大搜索。
 
@@ -2705,13 +3076,21 @@ workflow:
 
               - 如果判断不需要联网，输出空字符串。
 
-              - 如果已经调用 Tavily Search 且返回了 results，不允许输出空字符串；即使结果相关性不高，也要简短说明“未检索到高相关近期公开资料”，并列出最接近但不充分的来源和原因。
+              - 如果已经调用 Tavily Search 但没有可靠来源，简短说明“未检索到足够高质量的近期公开资料”。用户要求多条但合格来源不足时允许少于要求数量，不得用官网首页、无关页面或弱来源补足。
 
               - 如果联网工具返回 tool invoke error、invalid_param、401、403、429、500 或其他错误，不要继续重试同一个搜索；输出一行简短说明：外部检索暂未成功，未获得可验证来源，并保留错误关键词，供后续回答说明检索失败而不是误判为无结果。
 
               - 如果有可靠资料，输出简短 Markdown，不超过 600 字。
 
               - 必须区分“公开信息提示”和“CRM 内部事实”；外部资料不能替代 CRM、合同、报价或知识库规则。
+
+              - 转载页面必须按当前 URL 的实际发布方标记为转载或二手来源，不能因为正文提到原作者就把当前链接写成原作者的官方来源。厂商官网、厂商博客和厂商案例只能证明该厂商自己的公开主张，不能单独支撑“行业主流”“行业共识”等结论。
+
+              - 使用 current_time 与页面实际发布日期比较。用户说“最近 N 天/月/年”时，先按当前日期向前滚动计算最早合格日期；例如当前为
+              2026-07-15，则“最近一年”只包含 2025-07-15 及之后发布的资料。早于最早日期的内容只能标为历史背景，不得计入近期结果。发布日期不明时不得称为“近期”，也不得仅凭正文出现的年份推断页面发布日期。
+
+              - 每条可验证要点必须由所附链接直接支持；来源名称、实际 URL 和结论对象必须一致。所有引用 URL 必须逐字来自本轮 Tavily
+              Search 或 Tavily Extract 的返回结果，禁止凭模型记忆补写、猜测或拼接 URL。证据不足时明确限制，不得为了满足条数扩大结论。
 
               - 保留 1-3 个来源链接，使用普通 Markdown 链接；不要输出工具 payload、原始 JSON、搜索日志、内部推理或调试字段。
 
@@ -2739,7 +3118,7 @@ workflow:
               页面上下文：{{#conversation_context.context_text#}}
 
 
-              请只检索与本轮问题有关的公开资料，保留 1-3 个来源链接。'
+              请先检索足够的高质量候选资料，再筛选并保留 1-3 个可直接支持结论的来源链接。'
           tools:
             type: constant
             value:
@@ -2763,7 +3142,7 @@ workflow:
               tool_label: 获取当前时间
               tool_name: current_time
               type: builtin
-            - enabled: true
+            - enabled: false
               extra:
                 description: 专为人工智能代理 (LLM) 构建的搜索引擎工具，可快速提供实时、准确和真实的结果。
               parameters:
@@ -2833,7 +3212,7 @@ workflow:
                 max_results:
                   value:
                     type: constant
-                    value: 5
+                    value: 10
                 project_id:
                   value:
                     type: mixed
@@ -2842,7 +3221,7 @@ workflow:
               tool_label: Tavily Search
               tool_name: tavily_search
               type: builtin
-            - enabled: true
+            - enabled: false
               extra:
                 description: 使用 Tavily Extract 从一个或多个指定的 URL 提取网页内容。
               parameters:
@@ -2891,6 +3270,24 @@ workflow:
               tool_label: Tavily Extract
               tool_name: tavily_extract
               type: builtin
+            - enabled: true
+              extra:
+                description: 使用百度网页搜索API的工具
+              parameters:
+                query:
+                  auto: 1
+                  value: null
+                resource_type_filter:
+                  auto: 1
+                  value: null
+              plugin_id: qianfan/baidu_ai_search
+              provider_name: qianfan/baidu_ai_search/baidu_ai_search
+              provider_show_name: qianfan/baidu_ai_search/baidu_ai_search
+              settings: {}
+              tool_description: 使用百度网页搜索API的工具
+              tool_label: 百度搜索
+              tool_name: baidu_web_search
+              type: builtin
         agent_strategy_label: FunctionCalling
         agent_strategy_name: function_calling
         agent_strategy_provider_name: langgenius/agent/agent
@@ -2901,7 +3298,7 @@ workflow:
           version: 0.0.2
         output_schema: {}
         plugin_unique_identifier: langgenius/agent:0.0.40@d00a70e81bfb28fadd52cba7fd7a1f7c344c67b051e4a2e356a06c690736a7c4
-        selected: false
+        selected: true
         title: 外部情报检索 Agent
         tool_node_version: '2'
         type: agent
@@ -2913,7 +3310,7 @@ workflow:
       positionAbsolute:
         x: 4546
         y: 1485.5
-      selected: false
+      selected: true
       sourcePosition: right
       targetPosition: left
       type: custom
@@ -2962,6 +3359,30 @@ workflow:
       positionAbsolute:
         x: 4908
         y: 1650.5
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+    - data:
+        answer: '{{#business_answer_agent.text#}}'
+        desc: CRM 业务长回答直接流式输出。
+        selected: false
+        title: 输出 CRM 业务回答
+        type: answer
+        variables:
+        - value_selector:
+          - business_answer_agent
+          - text
+          variable: text
+      height: 131
+      id: business_answer_stream
+      position:
+        x: 8428
+        y: 1324.3136645962732
+      positionAbsolute:
+        x: 8428
+        y: 1324.3136645962732
       selected: false
       sourcePosition: right
       targetPosition: left
@@ -3394,11 +3815,11 @@ workflow:
           id: no_domain_agent
           logical_operator: and
         desc: 按需选择 CRM 轻量读取回答或领域 Agent。
+        height: 696
         selected: false
         title: 回答路径与业务 Agent 路由
         type: if-else
-        height: 696
-      height: 608
+      height: 696
       id: agent_router
       position:
         x: 7000
@@ -3427,14 +3848,37 @@ workflow:
         model:
           completion_params:
             enable_thinking: false
+            max_tokens: 600
           mode: chat
           name: kk
           provider: langgenius/openai_api_compatible/openai_api_compatible
         prompt_template:
         - id: sales_agent-system
           role: system
-          text: '你是销售协同 Agent，只从销售推进、客户意向、决策链、跟进动作角度判断。基于证据台账输出固定字段：domain, verdict,
-            risk_level, key_evidence, risks, missing, actions。
+          text: '你是销售协同 Agent，只判断销售推进、客户意向、决策链和跟进动作。你的输出是给最终综合节点使用的内部材料，不是给用户看的完整报告。
+
+
+            输出要求：
+
+            - 只能输出一个 JSON 对象，不要 Markdown、代码块或额外解释。
+
+            - 固定字段为 domain、verdict、risk_level、unique_findings、actions、missing_or_confirmation。
+
+            - verdict 用一句话说明本领域判断；risk_level 由你综合影响、发生可能性和可缓释性判断，不使用分数、关键词命中或代码评分。
+
+            - unique_findings 最多 2 条，每条包含 finding、evidence、basis。evidence 只引用支持该发现的
+            CRM 事实、知识规则编号或附件/外部证据；basis 只能是 fact、rule 或 inference，推断必须明确标注。
+
+            - actions 最多 2 条，只给本领域独有且可执行的动作；missing_or_confirmation 最多 2 条，只保留会实质改变结论的信息缺口或需人工确认事项。
+
+            - 不复述客户、商机、金额、阶段、负责人、联系人等公共概览，除非该事实直接支撑本领域独有结论。
+
+            - 知识规则中的风险等级只是局部证据信号，不自动等同于整体商机风险。知识库中的数值阈值若没有正式来源、版本、适用范围和责任人，只能作为参考基线，不得称为公司正式政策、标准底线或已批准条件。不得编造事实、规则编号、审批结果或客户承诺。
+
+
+            输出结构：
+
+            {"domain":"sales","verdict":"","risk_level":"低|中|高|阻塞","unique_findings":[{"finding":"","evidence":[""],"basis":"fact|rule|inference"}],"actions":[""],"missing_or_confirmation":[""]}
 
 
             证据台账：
@@ -3478,14 +3922,39 @@ workflow:
         model:
           completion_params:
             enable_thinking: false
+            max_tokens: 600
           mode: chat
           name: kk
           provider: langgenius/openai_api_compatible/openai_api_compatible
         prompt_template:
         - id: finance_agent-system
           role: system
-          text: '你是财务判断 Agent，只从折扣、付款、账期、回款风险角度判断。基于证据台账输出固定字段：domain, verdict, risk_level,
-            key_evidence, risks, missing, actions。
+          text: '你是财务判断 Agent，只判断折扣、付款、账期、回款和财务条件。你的输出是给最终综合节点使用的内部材料，不是给用户看的完整报告。
+
+
+            输出要求：
+
+            - 只能输出一个 JSON 对象，不要 Markdown、代码块或额外解释。
+
+            - 固定字段为 domain、verdict、risk_level、unique_findings、actions、missing_or_confirmation。
+
+            - verdict 用一句话说明本领域判断；risk_level 由你综合影响、发生可能性和可缓释性判断，不使用分数、关键词命中或代码评分。
+
+            - unique_findings 最多 2 条，每条包含 finding、evidence、basis。evidence 只引用支持该发现的
+            CRM 事实、知识规则编号或附件/外部证据；basis 只能是 fact、rule 或 inference，推断必须明确标注。
+
+            - actions 最多 2 条，只给本领域独有且可执行的动作；missing_or_confirmation 最多 2 条，只保留会实质改变结论的信息缺口或需人工确认事项。
+
+            - 不复述客户、商机、金额、阶段、负责人、联系人等公共概览，除非该事实直接支撑本领域独有结论。
+
+            - 知识规则中的风险等级只是局部证据信号，不自动等同于整体商机风险。知识库中的数值阈值若没有正式来源、版本、适用范围和责任人，只能作为参考基线，不得称为公司正式政策、标准底线或已批准条件。不得编造事实、规则编号、审批结果或客户承诺。
+
+            - 只有 CRM、附件或已确认政策中明确存在的付款方案，才能表述为“已有方案”或“现有条件”。你自行推导的新比例或分期结构只能标记为“备选谈判草案，待财务复核”，不得称为可接受底线、正式推荐方案或已获认可条件。金额受折扣影响但证据未说明当前金额是折前还是折后时，不计算确定的首付款金额；如确有必要，只能明确写出计算假设和公式。
+
+
+            输出结构：
+
+            {"domain":"finance","verdict":"","risk_level":"低|中|高|阻塞","unique_findings":[{"finding":"","evidence":[""],"basis":"fact|rule|inference"}],"actions":[""],"missing_or_confirmation":[""]}
 
 
             证据台账：
@@ -3529,14 +3998,37 @@ workflow:
         model:
           completion_params:
             enable_thinking: false
+            max_tokens: 600
           mode: chat
           name: kk
           provider: langgenius/openai_api_compatible/openai_api_compatible
         prompt_template:
         - id: delivery_agent-system
           role: system
-          text: '你是交付判断 Agent，只从上线周期、交付范围、资源、集成、验收准备角度判断。基于证据台账输出固定字段：domain, verdict,
-            risk_level, key_evidence, risks, missing, actions。
+          text: '你是交付判断 Agent，只判断上线周期、交付范围、资源、集成和验收准备。你的输出是给最终综合节点使用的内部材料，不是给用户看的完整报告。
+
+
+            输出要求：
+
+            - 只能输出一个 JSON 对象，不要 Markdown、代码块或额外解释。
+
+            - 固定字段为 domain、verdict、risk_level、unique_findings、actions、missing_or_confirmation。
+
+            - verdict 用一句话说明本领域判断；risk_level 由你综合影响、发生可能性和可缓释性判断，不使用分数、关键词命中或代码评分。
+
+            - unique_findings 最多 2 条，每条包含 finding、evidence、basis。evidence 只引用支持该发现的
+            CRM 事实、知识规则编号或附件/外部证据；basis 只能是 fact、rule 或 inference，推断必须明确标注。
+
+            - actions 最多 2 条，只给本领域独有且可执行的动作；missing_or_confirmation 最多 2 条，只保留会实质改变结论的信息缺口或需人工确认事项。
+
+            - 不复述客户、商机、金额、阶段、负责人、联系人等公共概览，除非该事实直接支撑本领域独有结论。
+
+            - 知识规则中的风险等级只是局部证据信号，不自动等同于整体商机风险。知识库中的数值阈值若没有正式来源、版本、适用范围和责任人，只能作为参考基线，不得称为公司正式政策、标准底线或已批准条件。不得编造事实、规则编号、审批结果或客户承诺。
+
+
+            输出结构：
+
+            {"domain":"delivery","verdict":"","risk_level":"低|中|高|阻塞","unique_findings":[{"finding":"","evidence":[""],"basis":"fact|rule|inference"}],"actions":[""],"missing_or_confirmation":[""]}
 
 
             证据台账：
@@ -3580,14 +4072,37 @@ workflow:
         model:
           completion_params:
             enable_thinking: false
+            max_tokens: 600
           mode: chat
           name: kk
           provider: langgenius/openai_api_compatible/openai_api_compatible
         prompt_template:
         - id: legal_agent-system
           role: system
-          text: '你是合同判断 Agent，只从验收、赔付、责任边界、数据安全、特殊承诺角度判断。基于证据台账输出固定字段：domain, verdict,
-            risk_level, key_evidence, risks, missing, actions。
+          text: '你是合同判断 Agent，只判断验收、赔付、责任边界、数据安全和特殊承诺。你的输出是给最终综合节点使用的内部材料，不是给用户看的完整报告。
+
+
+            输出要求：
+
+            - 只能输出一个 JSON 对象，不要 Markdown、代码块或额外解释。
+
+            - 固定字段为 domain、verdict、risk_level、unique_findings、actions、missing_or_confirmation。
+
+            - verdict 用一句话说明本领域判断；risk_level 由你综合影响、发生可能性和可缓释性判断，不使用分数、关键词命中或代码评分。
+
+            - unique_findings 最多 2 条，每条包含 finding、evidence、basis。evidence 只引用支持该发现的
+            CRM 事实、知识规则编号或附件/外部证据；basis 只能是 fact、rule 或 inference，推断必须明确标注。
+
+            - actions 最多 2 条，只给本领域独有且可执行的动作；missing_or_confirmation 最多 2 条，只保留会实质改变结论的信息缺口或需人工确认事项。
+
+            - 不复述客户、商机、金额、阶段、负责人、联系人等公共概览，除非该事实直接支撑本领域独有结论。
+
+            - 知识规则中的风险等级只是局部证据信号，不自动等同于整体商机风险。知识库中的数值阈值若没有正式来源、版本、适用范围和责任人，只能作为参考基线，不得称为公司正式政策、标准底线或已批准条件。不得编造事实、规则编号、审批结果或客户承诺。
+
+
+            输出结构：
+
+            {"domain":"legal","verdict":"","risk_level":"低|中|高|阻塞","unique_findings":[{"finding":"","evidence":[""],"basis":"fact|rule|inference"}],"actions":[""],"missing_or_confirmation":[""]}
 
 
             证据台账：
@@ -3626,12 +4141,12 @@ workflow:
             assistant: ''
             user: ''
           window:
-            enabled: true
+            enabled: false
             size: 5
         model:
           completion_params:
             enable_thinking: false
-            max_tokens: 1500
+            max_tokens: 800
             temperature: 0.3
           mode: chat
           name: kk
@@ -3737,7 +4252,7 @@ workflow:
             assistant: ''
             user: ''
           window:
-            enabled: true
+            enabled: false
             size: 5
         model:
           completion_params:
@@ -3746,7 +4261,7 @@ workflow:
             reasoning_format: auto
             temperature: 0.3
           mode: chat
-          name: gpt-5.5
+          name: kk
           provider: langgenius/openai_api_compatible/openai_api_compatible
         prompt_template:
         - id: business-answer-system
@@ -3756,45 +4271,74 @@ workflow:
 
             总原则：
 
-            - 按用户这一次明确提出的问题回答，不主动扩展到未请求的卡点、风险、建议、下一步、缺失字段。
+            - 对于你觉得不合理的地方，例如违法物理规律，明显的内容逻辑错误等，你可以综合考虑进行调整，这条命令属于最高优先级。
 
-            - 你是最终编辑，不是领域 Agent 结论转述器。必须压缩、去重、合并相同事实，禁止把销售、财务、交付、合同
-            Agent 的输出逐段搬运给用户。
+            - 按用户这一次明确提出的问题回答，不主动扩展到未请求的风险、建议、草稿、话术、下一步或缺失字段。
 
-            - 开头必须先给 1-2 句直接结论；然后只保留最关键的 2-4 条依据或动作。
+            - 你是最终编辑，领域 Agent 输出只是素材，不是展示结构。必须跨领域合并相同事实、风险和动作，禁止逐段搬运销售、财务、交付、合同 Agent
+            的输出。
 
-            - 相同事实只出现一次，例如折扣、付款比例、上线周期、验收/赔付条款不要在多个段落重复。
+            - 开头用 1-2 句话给出总体判断，这就是全文唯一的总体、统一或最终结论。即使用户明确要求“统一推进结论”，也必须在开头完成，不得在分析后再次生成结论段落或结论章节。
 
-            - 除非用户明确要求“完整多角色评审报告”，不要按“销售/财务/交付/合同”四个大标题机械展开；应整合成“结论 / 关键依据 /
-            建议动作”这类更适合阅读的结构。
+            - 相同事实只完整解释一次，不得分别在商机概览、风险、建议和结论中重复。不要自动罗列客户、商机、金额、阶段、负责人、联系人等公共概览；仅在支撑某个关键判断时引用必要字段。
 
-            - 如果用户只是要 CRM 事实读取，即使误入本节点，也只给简洁事实摘要或列表，不写 Deal Desk 分析报告。
+            - 判断必须区分 CRM/附件/外部事实、知识规则和模型推断。知识规则中的风险等级只是局部证据信号，不自动等同于整体商机风险。知识库中的数值阈值若没有正式来源、版本、适用范围和责任人，只能称为参考规则或参考基线，不得称为公司正式政策、标准底线或已批准条件。
 
-            - 如果用户要求判断、总结、推进、评审或建议，再给业务判断；判断必须区分“CRM 事实 / 证据显示 / 我的推断”。
+            - 使用外部公开资料时必须保留其证据强度：外部检索已说明资料不足、相关性低或只是线索时，不得升级成确定事实。转载内容必须标为转载或二手来源；厂商官网、厂商文章和厂商案例只能表述为该厂商的公开主张，不能单独改写成行业趋势或行业共识。合格来源不足时返回实际数量并说明限制，不得补足；发布日期不明的来源不得描述为近期。外部资料与
+            CRM 内部事实必须明确区分。
 
-            - 能回答多少回答多少；只有关键信息不足以完成用户目标时，才说明缺什么。
+            - 使用标准 Markdown 自然组织内容，可按需要使用标题、列表或表格。是否使用加粗以及加粗哪些内容，由你根据当前回答的语义层级与可读性自主决定，不要求必须出现加粗，也不规定固定的加粗位置或类型。
 
-            - 不暴露节点名、路由名、工具 payload、JSON 字段。
+            - 只要实际采用了外部公开资料，每个由外部资料支撑的关键事实都必须在该句或段落末尾直接附可读的来源名称链接，格式为 [发布方或简短原网页标题](原始URL)。链接文字必须让用户直接看出来源，不使用
+            [1]、[2] 等数字角标；多个来源使用中文顿号或空格分隔。默认不再重复生成文末来源清单；只有用户明确要求“列出来源”或“给出参考链接”时，才增加且只增加一次 ### 公开信息来源，汇总正文实际引用的
+            1-3 条链接。标题、URL、发布方和日期只能复制证据台账已有信息；URL 必须逐字保留，不得改写、拼接或凭记忆补全。若结构化 sources 为空但外部证据正文含有原始 URL，可以逐字复制该 URL；缺失信息不得猜测。没有可验证原始
+            URL 时必须说明未获得可验证链接，并且不得把对应信息写成已验证事实。纯 CRM、附件或知识库回答不要生成来源链接或来源章节。
 
-            - 如果用户要求草稿、邮件、话术或跟进计划，直接给可复制内容。
+            - 涉及折扣、金额、付款比例或分期节点时，必须区分“证据中已有条件”和“AI 新建议”。只有 CRM、附件或已确认政策中明确存在的数字方案，才能作为已有方案引用；AI
+            自行组合的新比例只能称为备选谈判草案并标记待财务复核，不能称为可接受底线、正式推荐方案或已认可条件。若证据没有说明金额是折前还是折后，不得把折扣与商机金额混算后输出确定金额；必要计算必须明确假设和公式。
 
-            - 如果用户要求保存或写入 CRM，说明当前版本只生成内容，不执行写入。
+            - 风险等级由你综合影响、发生可能性和可缓释性判断；优先级由你综合业务价值、时间窗口和推进成熟度判断。不使用分数、关键词命中或代码评分；同一问题的风险和优先级标签必须前后一致。
 
-            - 不声称已审批、已写回、已完成 CRM 操作。
+            - 能回答多少回答多少；仅列出会实质改变结论的缺失信息。不得因模板存在而补齐用户没有要求的内容。
 
-            - 如果用户明确要求画图、图表、漏斗图或可视化，禁止用 ASCII 图、Mermaid 或 text 代码块模拟图表；只输出必要业务解释，图表由系统
-            chart fence 承载。
+            - 不暴露节点名、路由名、工具 payload、JSON 字段，不展示完整推理过程，不编造事实、规则编号、负责人或审批结果。
+
+            - 如果用户要求草稿、邮件、话术或跟进计划，直接给可复制内容；没有要求时不要附赠话术或写回草稿。
+
+            - 如果用户要求保存或写入 CRM，说明当前版本只生成内容，不执行写入；不声称已审批、已写回或已完成 CRM 操作。
+
+            - 不做数据脱敏。
+
+            - 表格只用于至少 3 项可比较信息。图表只用于真实的趋势、分布、漏斗或阶段数据；定性评审不强行生成图表。用户明确要求图表时，不用 ASCII、Mermaid
+            或 text 代码块模拟，图表由系统 chart fence 承载。
 
 
-            回答深度：
+            deep_review 组织规则：
+
+            - 总体判断之后，围绕当前最重要的 3-5 个业务问题组织内容，而不是按 Agent 或固定四领域组织。默认保留最重要的 3 个问题；只有确有互不重复、会显著改变决策的重大问题时才扩展到
+            5 个。
+
+            - 每个关键问题只写一次“判断 + 必要证据 + 业务影响”，对应动作不要写在议题内部，统一放到全文唯一的“下一步”清单。不要再建立独立的商机概览和重复风险清单。
+
+            - 全文只能有一组 3-5 个可执行“下一步”，不得先写“对应动作”“建议交易结构”再重复生成下一步。只保留会实质改变结论的待确认信息。
+
+            - 用户明确要求四个视角时，先给总体判断，再使用一个紧凑矩阵；矩阵只保留“视角 / 独有判断 / 必要证据”三列，每格控制在 1-2 句，不在矩阵内写动作。矩阵后直接进入全文唯一的“下一步”清单，不得再生成“统一推进结论”“统一交易结构”或重复复述开头结论。
+
+            - 主题驱动评审使用自然、紧凑的段落或要点，不要在每个议题下机械重复“判断 / 必要证据 / 业务影响”等固定小标题；四视角矩阵除外。
+
+            - deep_review 只允许按“开头唯一结论 → 关键议题或四视角矩阵 → 下一步 → 必要时的待确认信息 → 一次责任边界”推进。关键议题或矩阵结束后必须直接进入“下一步”，不得插入过渡性总结，不得再次陈述是否推进、整体风险、优先级或推进前提。
+
+            - 对分析、判断或评审类回答，只在全文最后保留一次责任边界：AI 输出是内部评审建议，折扣、付款、交付承诺和合同条款需相应负责人确认。领域
+            Agent 中零散的人工确认事项应合并到此处，不要多次重复。
+
+
+            其他回答深度：
 
             - minimal：一两句话，直接给结论。
 
             - concise：简洁段落或表格，只包含用户要求的事实。
 
-            - standard：先结论后依据，可补少量建议。
-
-            - deep_review：多视角评审，但仍要控制长度；优先输出最终判断、关键证据、主要风险和下一步动作，不展示完整推理过程。
+            - standard：先结论后依据，只在用户目标需要时补少量建议。
 
 
             当前 answer_scope：{{#task_plan_normalize.answer_scope#}}
@@ -3825,10 +4369,10 @@ workflow:
       id: business_answer_agent
       position:
         x: 8066
-        y: 1327.6469979296066
+        y: 1324.3136645962732
       positionAbsolute:
         x: 8066
-        y: 1327.6469979296066
+        y: 1324.3136645962732
       selected: false
       sourcePosition: right
       targetPosition: left
@@ -3841,37 +4385,53 @@ workflow:
           \n\ndef _loads(value, fallback):\n    if isinstance(value, (dict, list)):\n\
           \        return value\n    text = _clean(value)\n    if not text:\n    \
           \    return fallback\n    try:\n        return json.loads(text)\n    except\
-          \ Exception:\n        return fallback\n\n\ndef _expects_chart(query):\n\
-          \    text = _clean(query).lower()\n    return any(word in text for word\
-          \ in [\n        '图表', '图形', '画图', '可视化', '漏斗图', '漏斗', '柱状图', '折线图', '饼图',\n\
-          \        'chart', 'funnel', 'bar chart', 'visualize',\n    ])\n\n\ndef _remove_plain_chart_fences(answer):\n\
+          \ Exception:\n        return fallback\n\n\ndef _normalize_bound_object(value):\n\
+          \    if not isinstance(value, dict):\n        return {}\n    object_type\
+          \ = _clean(value.get('objectType') or value.get('object_type') or value.get('type'))\n\
+          \    object_id = _clean(value.get('objectId') or value.get('object_id')\
+          \ or value.get('id'))\n    if not object_type or not object_id:\n      \
+          \  return {}\n    bound = {\n        'objectType': object_type,\n      \
+          \  'objectId': object_id,\n        'objectName': _clean(value.get('objectName')\
+          \ or value.get('object_name') or value.get('name')),\n    }\n    optional_fields\
+          \ = {\n        'source': value.get('source'),\n        'customerId': value.get('customerId')\
+          \ or value.get('customer_id'),\n        'customerName': value.get('customerName')\
+          \ or value.get('customer_name'),\n        'relationTarget': value.get('relationTarget')\
+          \ or value.get('relation_target'),\n    }\n    for key, raw_value in optional_fields.items():\n\
+          \        cleaned = _clean(raw_value)\n        if cleaned:\n            bound[key]\
+          \ = cleaned\n    return bound\n\n\ndef _expects_chart(query):\n    text\
+          \ = _clean(query).lower()\n    return any(word in text for word in [\n \
+          \       '图表', '图形', '画图', '可视化', '漏斗图', '漏斗', '柱状图', '折线图', '饼图',\n    \
+          \    'chart', 'funnel', 'bar chart', 'visualize',\n    ])\n\n\ndef _remove_plain_chart_fences(answer):\n\
           \    text = _clean(answer)\n    pattern = r'```(?:text|txt|plain)?\\s*\\\
           n(?=[\\s\\S]{0,1200}(?:漏斗|需求确认|方案评审|商务沟通|合同推进|赢单预测))[\\s\\S]*?```'\n   \
-          \ return re.sub(pattern, '', text, flags=re.I).strip()\n\n\ndef _turn_type(task_type):\n\
-          \    mapping = {\n        'general_chat': 'quick_answer',\n        'image_answer':\
-          \ 'quick_answer',\n        'object_query': 'object_select',\n        'progress_summary':\
-          \ 'text_analysis',\n        'sales_assist': 'text_analysis',\n        'finance_check':\
-          \ 'text_analysis',\n        'delivery_check': 'text_analysis',\n       \
-          \ 'legal_check': 'text_analysis',\n        'full_review': 'deep_deal_review_brief',\n\
-          \        'stats_analysis': 'stats_query',\n        'content_draft': 'text_analysis',\n\
-          \        'followup_plan': 'text_analysis',\n        'external_research':\
-          \ 'text_analysis',\n    }\n    return mapping.get(_clean(task_type), 'text_analysis')\n\
-          \n\ndef main(\n    simple_answer: str = '',\n    image_answer: str = '',\n\
-          \    gap_answer: str = '',\n    crm_light_answer: str = '',\n    business_answer:\
-          \ str = '',\n    task_type: str = '',\n    target_object_json: str = '',\n\
-          \    original_query: str = '',\n    chart_blocks_text: str = '',\n) -> dict:\n\
-          \    answer = _strip_think(business_answer) or _strip_think(crm_light_answer)\
-          \ or _strip_think(gap_answer) or _strip_think(image_answer) or _strip_think(simple_answer)\n\
-          \    if not answer:\n        answer = '我还没有拿到足够信息来回答这个问题。请补充客户、商机或你希望我分析的具体内容。'\n\
+          \ return re.sub(pattern, '', text, flags=re.I).strip()\n\n\ndef _turn_type(task_type,\
+          \ resolution_status):\n    mapping = {\n        'general_chat': 'quick_answer',\n\
+          \        'image_answer': 'quick_answer',\n        'progress_summary': 'text_analysis',\n\
+          \        'sales_assist': 'text_analysis',\n        'finance_check': 'text_analysis',\n\
+          \        'delivery_check': 'text_analysis',\n        'legal_check': 'text_analysis',\n\
+          \        'full_review': 'deep_deal_review_brief',\n        'stats_analysis':\
+          \ 'stats_query',\n        'content_draft': 'text_analysis',\n        'followup_plan':\
+          \ 'text_analysis',\n        'external_research': 'text_analysis',\n    }\n\
+          \    normalized = _clean(task_type)\n    if normalized == 'object_query':\n\
+          \        unresolved = _clean(resolution_status).lower() in ['ambiguous',\
+          \ 'missing', 'not_found']\n        return 'object_select' if unresolved\
+          \ else 'quick_answer'\n    return mapping.get(normalized, 'text_analysis')\n\
+          \n\ndef main(\n    direct_answer: str = '',\n    gap_answer: str = '',\n\
+          \    crm_light_answer: str = '',\n    task_type: str = '',\n    resolution_status:\
+          \ str = '',\n    target_object_json: str = '',\n    original_query: str\
+          \ = '',\n    chart_blocks_text: str = '',\n) -> dict:\n    answer = _strip_think(direct_answer)\
+          \ or _strip_think(crm_light_answer) or _strip_think(gap_answer)\n    if\
+          \ not answer:\n        answer = '我还没有拿到足够信息来回答这个问题。请补充客户、商机或你希望我分析的具体内容。'\n\
           \    chart_blocks = _clean(chart_blocks_text)\n    if _expects_chart(original_query)\
           \ and chart_blocks:\n        answer = _remove_plain_chart_fences(answer)\n\
           \        if '```chart' not in answer:\n            answer = (answer.rstrip()\
-          \ + '\\n\\n' + chart_blocks).strip()\n    bound = _loads(target_object_json,\
-          \ {})\n    payload = {\n        'protocolVersion': '1.0',\n        'turnType':\
-          \ _turn_type(task_type),\n        'answerText': answer,\n        'processEvents':\
-          \ [],\n        'writeback': {},\n        'boundObject': bound if isinstance(bound,\
-          \ dict) else {},\n    }\n    return {'protocol_answer': json.dumps(payload,\
-          \ ensure_ascii=False)}\n"
+          \ + '\\n\\n' + chart_blocks).strip()\n    bound = _normalize_bound_object(_loads(target_object_json,\
+          \ {}))\n    if _clean(resolution_status).lower() in ['ambiguous', 'missing',\
+          \ 'not_found']:\n        bound = {}\n    payload = {\n        'protocolVersion':\
+          \ '1.0',\n        'turnType': _turn_type(task_type, resolution_status),\n\
+          \        'answerText': answer,\n        'processEvents': [],\n        'writeback':\
+          \ {},\n        'boundObject': bound,\n    }\n    return {'protocol_answer':\
+          \ json.dumps(payload, ensure_ascii=False)}\n"
         code_language: python3
         desc: 补齐协议字段并做基础格式修正。
         outputs:
@@ -3883,13 +4443,9 @@ workflow:
         type: code
         variables:
         - value_selector:
-          - simple_answer
-          - text
-          variable: simple_answer
-        - value_selector:
-          - image_answer
-          - text
-          variable: image_answer
+          - task_plan_normalize
+          - direct_answer
+          variable: direct_answer
         - value_selector:
           - gap_answer
           - answer_text
@@ -3899,13 +4455,13 @@ workflow:
           - answer_text
           variable: crm_light_answer
         - value_selector:
-          - business_answer_agent
-          - text
-          variable: business_answer
-        - value_selector:
           - task_plan_normalize
           - task_type
           variable: task_type
+        - value_selector:
+          - task_plan_normalize
+          - resolution_status
+          variable: resolution_status
         - value_selector:
           - evidence_ledger
           - target_object_json
@@ -3983,6 +4539,7 @@ workflow:
           \ row in rows:\n        safe = [_clean(cell).replace('\\n', ' ') or '-'\
           \ for cell in row]\n        lines.append('| ' + ' | '.join(safe) + ' |')\n\
           \    return '\\n'.join(lines)\n\n\ndef _candidate_kind(action, candidates):\n\
+          \    if _clean(action) == 'resolve_crm_object':\n        return 'mixed'\n\
           \    if _clean(action) == 'search_opportunities':\n        return 'opportunity'\n\
           \    if _clean(action) == 'search_customers':\n        return 'customer'\n\
           \    for item in candidates:\n        if isinstance(item, dict) and any(_clean(item.get(key))\
@@ -3990,24 +4547,36 @@ workflow:
           \         return 'opportunity'\n    return 'customer'\n\n\ndef _candidate_answer(evidence,\
           \ original_query):\n    candidates = evidence.get('candidates') if isinstance(evidence.get('candidates'),\
           \ list) else []\n    kind = _candidate_kind(evidence.get('action'), candidates)\n\
-          \    count = evidence.get('count') or len(candidates)\n    if kind == 'opportunity':\n\
+          \    count = evidence.get('count') or len(candidates)\n    if kind == 'mixed':\n\
           \        rows = []\n        for item in candidates[:10]:\n            if\
-          \ not isinstance(item, dict):\n                continue\n            rows.append([\n\
-          \                _fmt(item.get('name')),\n                _fmt(item.get('customerName')),\n\
+          \ not isinstance(item, dict):\n                continue\n            object_type\
+          \ = _clean(item.get('objectType')) or 'unknown'\n            rows.append([\n\
+          \                '客户' if object_type == 'customer' else ('商机' if object_type\
+          \ == 'opportunity' else '其他'),\n                _fmt(item.get('objectName')\
+          \ or item.get('name')),\n                _fmt(item.get('customerName')),\n\
           \                _fmt(item.get('stageName') or item.get('stage')),\n   \
-          \             _money(item.get('amount')),\n                _percent(item.get('possible')),\n\
-          \                _fmt(item.get('ownerName') or item.get('owner')),\n   \
-          \             _date(item.get('expectedEndTime') or item.get('expected_end_time')),\n\
-          \            ])\n        title = f'查到 {count} 条匹配商机：'\n        return title\
-          \ + '\\n\\n' + _md_table(['商机名称', '客户', '阶段', '金额', '赢率', '负责人', '预计成交'],\
-          \ rows)\n\n    rows = []\n    for item in candidates[:10]:\n        if not\
-          \ isinstance(item, dict):\n            continue\n        rows.append([\n\
-          \            _fmt(item.get('name')),\n            _fmt(item.get('ownerName')\
-          \ or item.get('owner')),\n            _fmt(item.get('levelName') or item.get('level')),\n\
-          \            _fmt(item.get('industryName') or item.get('industry')),\n \
-          \           _date(item.get('followTime') or item.get('follow_time')),\n\
-          \        ])\n    title = f'查到 {count} 条匹配客户：'\n    return title + '\\n\\\
-          n' + _md_table(['客户名称', '负责人', '级别', '行业', '最近跟进'], rows)\n\n\ndef _detail_answer(evidence):\n\
+          \             _money(item.get('amount')),\n                _fmt(item.get('ownerName')\
+          \ or item.get('owner')),\n            ])\n        return '我识别到多个可能的 CRM\
+          \ 对象，请输入完整客户名或商机名继续：\\n\\n' + _md_table(['类型', '名称', '所属客户', '阶段', '金额',\
+          \ '负责人'], rows)\n\n    if kind == 'opportunity':\n        rows = []\n  \
+          \      for item in candidates[:10]:\n            if not isinstance(item,\
+          \ dict):\n                continue\n            rows.append([\n        \
+          \        _fmt(item.get('objectName') or item.get('name')),\n           \
+          \     _fmt(item.get('customerName')),\n                _fmt(item.get('stageName')\
+          \ or item.get('stage')),\n                _money(item.get('amount')),\n\
+          \                _percent(item.get('possible')),\n                _fmt(item.get('ownerName')\
+          \ or item.get('owner')),\n                _date(item.get('expectedEndTime')\
+          \ or item.get('expected_end_time')),\n            ])\n        title = f'查到\
+          \ {count} 条匹配商机：'\n        return title + '\\n\\n' + _md_table(['商机名称',\
+          \ '客户', '阶段', '金额', '赢率', '负责人', '预计成交'], rows)\n\n    rows = []\n    for\
+          \ item in candidates[:10]:\n        if not isinstance(item, dict):\n   \
+          \         continue\n        rows.append([\n            _fmt(item.get('objectName')\
+          \ or item.get('name')),\n            _fmt(item.get('ownerName') or item.get('owner')),\n\
+          \            _fmt(item.get('levelName') or item.get('level')),\n       \
+          \     _fmt(item.get('industryName') or item.get('industry')),\n        \
+          \    _date(item.get('followTime') or item.get('follow_time')),\n       \
+          \ ])\n    title = f'查到 {count} 条匹配客户：'\n    return title + '\\n\\n' + _md_table(['客户名称',\
+          \ '负责人', '级别', '行业', '最近跟进'], rows)\n\n\ndef _detail_answer(evidence):\n\
           \    data = _first_data(evidence)\n    opp = data.get('opportunity') if\
           \ isinstance(data.get('opportunity'), dict) else {}\n    customer = data.get('customer')\
           \ if isinstance(data.get('customer'), dict) else {}\n    facts = data.get('businessFacts')\
@@ -4019,20 +4588,20 @@ workflow:
           \ or facts.get('amount'))],\n            ['赢率', _percent(opp.get('possible')\
           \ or facts.get('winRate'))],\n            ['负责人', _fmt(opp.get('ownerName')\
           \ or facts.get('ownerName'))],\n            ['最新跟进', _fmt(facts.get('latestFollowRecord'))],\n\
-          \            ['下一步计划', _fmt(facts.get('nextFollowPlan'))],\n        ]\n\
-          \        return '这是当前 CRM 里查到的商机摘要：\\n\\n' + _md_table(['项目', '信息'], rows)\n\
-          \    if customer:\n        rows = [\n            ['客户名称', _fmt(customer.get('name'))],\n\
-          \            ['负责人', _fmt(customer.get('ownerName') or customer.get('owner'))],\n\
-          \            ['客户级别', _fmt(customer.get('levelName') or customer.get('level'))],\n\
-          \            ['行业', _fmt(customer.get('industryName') or customer.get('industry'))],\n\
-          \        ]\n        opportunities = data.get('opportunities') if isinstance(data.get('opportunities'),\
-          \ list) else []\n        answer = '这是当前 CRM 里查到的客户摘要：\\n\\n' + _md_table(['项目',\
-          \ '信息'], rows)\n        if opportunities:\n            answer += '\\n\\\
-          n关联商机：\\n\\n' + _md_table(\n                ['商机名称', '阶段', '金额', '赢率'],\n\
-          \                [[_fmt(item.get('name')), _fmt(item.get('stageName') or\
-          \ item.get('stage')), _money(item.get('amount')), _percent(item.get('possible'))]\
-          \ for item in opportunities[:10] if isinstance(item, dict)]\n          \
-          \  )\n        return answer\n    return ''\n\n\ndef main(crm_evidence_json:\
+          \            ['下一步计划', _fmt(facts.get('nextFollowPlan') or facts.get('nextOpenPlan'))],\n\
+          \        ]\n        return '这是当前 CRM 里查到的商机摘要：\\n\\n' + _md_table(['项目',\
+          \ '信息'], rows)\n    if customer:\n        rows = [\n            ['客户名称',\
+          \ _fmt(customer.get('name'))],\n            ['负责人', _fmt(customer.get('ownerName')\
+          \ or customer.get('owner'))],\n            ['客户级别', _fmt(customer.get('levelName')\
+          \ or customer.get('level'))],\n            ['行业', _fmt(customer.get('industryName')\
+          \ or customer.get('industry'))],\n        ]\n        opportunities = data.get('opportunities')\
+          \ if isinstance(data.get('opportunities'), list) else []\n        answer\
+          \ = '这是当前 CRM 里查到的客户摘要：\\n\\n' + _md_table(['项目', '信息'], rows)\n       \
+          \ if opportunities:\n            answer += '\\n\\n关联商机：\\n\\n' + _md_table(\n\
+          \                ['商机名称', '阶段', '金额', '赢率'],\n                [[_fmt(item.get('name')),\
+          \ _fmt(item.get('stageName') or item.get('stage')), _money(item.get('amount')),\
+          \ _percent(item.get('possible'))] for item in opportunities[:10] if isinstance(item,\
+          \ dict)]\n            )\n        return answer\n    return ''\n\n\ndef main(crm_evidence_json:\
           \ str = '', original_query: str = '', answer_mode: str = '', multi_object_strategy:\
           \ str = '') -> dict:\n    evidence = _loads(crm_evidence_json, {})\n   \
           \ tool_errors = evidence.get('tool_errors') if isinstance(evidence.get('tool_errors'),\
@@ -4074,19 +4643,18 @@ workflow:
       height: 96
       id: crm_light_answer
       position:
-        x: 7724
-        y: 1044
+        x: 7780.85766598314
+        y: 1035.8774762881228
       positionAbsolute:
-        x: 7724
-        y: 1044
+        x: 7780.85766598314
+        y: 1035.8774762881228
       selected: false
       sourcePosition: right
       targetPosition: left
       type: custom
       width: 242
     viewport:
-      x: -7380.010159275399
-      y: 457.887801050628
-      zoom: 1.1486983549970349
+      x: -3433.6380659023653
+      y: -538.7335608093547
+      zoom: 0.8705505632961256
   rag_pipeline_variables: []
-

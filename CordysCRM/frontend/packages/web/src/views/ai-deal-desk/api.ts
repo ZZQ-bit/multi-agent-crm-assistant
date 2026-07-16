@@ -6,13 +6,19 @@ import { getToken } from '@lib/shared/method/auth';
 import CDR from '@/api/http';
 import { getGlobalCustomerList, globalSearchOptPage } from '@/api/modules';
 
+import { createAnswerDeltaScheduler } from './answerDeltaScheduler';
+
 import type {
   DealDeskChatflowResponse,
+  DealDeskConversationSavePayload,
   DealDeskChatRequestPayload,
   DealDeskChatStreamFrame,
   DealDeskChatStreamHandlers,
   DealDeskChatStreamOptions,
+  DealDeskMessageSavePayload,
   DealDeskStopChatResponse,
+  DealDeskStoredConversationPayload,
+  DealDeskStoredMessagePayload,
   DealDeskUploadedFilePayload,
 } from './types';
 
@@ -20,6 +26,7 @@ const chatUrl = '/ai/deal-desk/chat';
 const chatStreamUrl = '/ai/deal-desk/chat/stream';
 const chatStopUrl = '/ai/deal-desk/chat/stop';
 const uploadUrl = '/ai/deal-desk/file/upload';
+const conversationsUrl = '/ai/deal-desk/conversations';
 
 function buildDealDeskApiUrl(path: string) {
   const apiBase = String(import.meta.env.VITE_API_BASE_URL || '').replace(/^\/+|\/+$/g, '');
@@ -93,6 +100,7 @@ export async function streamDealDeskChat(
 
   const reader = response.body.getReader();
   const decoder = new TextDecoder('utf-8');
+  const answerDeltaScheduler = createAnswerDeltaScheduler(handlers.onAnswerDelta, options.signal);
   let buffer = '';
   let finalPayload: DealDeskChatflowResponse | null = null;
 
@@ -111,7 +119,7 @@ export async function streamDealDeskChat(
       if (frame.type === 'process_event') {
         handlers.onProcessEvent?.(frame.event);
       } else if (frame.type === 'answer_delta') {
-        handlers.onAnswerDelta?.(frame.text, {
+        answerDeltaScheduler.enqueue(frame.text, {
           conversationId: frame.conversationId,
           messageId: frame.messageId,
           taskId: frame.taskId,
@@ -126,12 +134,17 @@ export async function streamDealDeskChat(
     }
   }
 
-  await readNextChunk();
+  try {
+    await readNextChunk();
 
-  if (!finalPayload) {
-    throw new Error('多Agent智能助手 stream ended without final payload');
+    if (!finalPayload) {
+      throw new Error('多Agent智能助手 stream ended without final payload');
+    }
+    await answerDeltaScheduler.flush();
+    return finalPayload;
+  } finally {
+    answerDeltaScheduler.dispose();
   }
-  return finalPayload;
 }
 
 export async function stopDealDeskChat(taskId: string) {
@@ -148,6 +161,66 @@ export async function uploadDealDeskFile(file: File) {
   const response = await CDR.uploadFile<DealDeskUploadedFilePayload | { data?: DealDeskUploadedFilePayload }>(
     { url: uploadUrl },
     { fileList: [file] }
+  );
+  return unwrapDealDeskResponse(response);
+}
+
+export async function listDealDeskConversations(limit = 50) {
+  const response = await CDR.get<DealDeskStoredConversationPayload[] | { data?: DealDeskStoredConversationPayload[] }>(
+    { url: conversationsUrl, params: { limit } },
+    {
+      isTransformResponse: false,
+    }
+  );
+  return unwrapDealDeskResponse(response) || [];
+}
+
+export async function getDealDeskConversation(id: string) {
+  const response = await CDR.get<DealDeskStoredConversationPayload | { data?: DealDeskStoredConversationPayload }>(
+    { url: `${conversationsUrl}/${id}` },
+    {
+      isTransformResponse: false,
+    }
+  );
+  return unwrapDealDeskResponse(response);
+}
+
+export async function createDealDeskConversation(data: DealDeskConversationSavePayload) {
+  const response = await CDR.post<DealDeskStoredConversationPayload | { data?: DealDeskStoredConversationPayload }>(
+    { url: conversationsUrl, data },
+    {
+      isTransformResponse: false,
+    }
+  );
+  return unwrapDealDeskResponse(response);
+}
+
+export async function updateDealDeskConversation(id: string, data: DealDeskConversationSavePayload) {
+  const response = await CDR.put<DealDeskStoredConversationPayload | { data?: DealDeskStoredConversationPayload }>(
+    { url: `${conversationsUrl}/${id}`, data },
+    {
+      isTransformResponse: false,
+    }
+  );
+  return unwrapDealDeskResponse(response);
+}
+
+export async function saveDealDeskMessage(id: string, data: DealDeskMessageSavePayload) {
+  const response = await CDR.post<DealDeskStoredMessagePayload | { data?: DealDeskStoredMessagePayload }>(
+    { url: `${conversationsUrl}/${id}/messages`, data },
+    {
+      isTransformResponse: false,
+    }
+  );
+  return unwrapDealDeskResponse(response);
+}
+
+export async function deleteDealDeskConversation(id: string) {
+  const response = await CDR.delete<{ success?: boolean } | { data?: { success?: boolean } }>(
+    { url: `${conversationsUrl}/${id}` },
+    {
+      isTransformResponse: false,
+    }
   );
   return unwrapDealDeskResponse(response);
 }

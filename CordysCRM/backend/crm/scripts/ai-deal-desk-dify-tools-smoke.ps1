@@ -78,6 +78,15 @@ $opportunitySearch = Invoke-DifyTool "search-opportunities" $headers @{ keyword 
 Assert-ToolCode "anonymous search-opportunities" $opportunitySearch "OK"
 $opportunityId = $opportunitySearch.data.candidates[0].id
 
+$resolvedObject = Invoke-DifyTool "resolve-crm-object" $headers @{ objectReference = $OpportunityKeyword; limit = 5 }
+Assert-ToolCode "anonymous resolve-crm-object" $resolvedObject "OK"
+Assert-DataKey "anonymous resolve-crm-object" $resolvedObject "resolvedObject"
+if ($resolvedObject.data.resolvedObject.objectType -ne "opportunity") {
+  $actual = $resolvedObject | ConvertTo-Json -Depth 20
+  throw "anonymous resolve-crm-object expected opportunity but got: $actual"
+}
+Write-Host "PASS anonymous resolve-crm-object -> opportunity"
+
 $customerContext = Invoke-DifyTool "get-customer-context" $headers @{ customerId = $customerId }
 Assert-ToolCode "anonymous get-customer-context" $customerContext "OK"
 Assert-DataKey "anonymous get-customer-context" $customerContext "customer"
@@ -128,4 +137,3 @@ if ($CreateWriteback) {
 }
 
 Write-Host "多Agent智能助手 anonymous Dify Tool API smoke test completed."
-

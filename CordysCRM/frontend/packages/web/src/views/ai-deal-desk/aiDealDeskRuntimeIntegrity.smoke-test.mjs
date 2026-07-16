@@ -46,6 +46,10 @@ assert.equal(conversationTurnSource.includes('turn-retry-button'), true);
 assert.equal(conversationTurnSource.includes('iconicon_refresh'), true);
 assert.equal(conversationTurnSource.includes('useLegacyCopy'), true);
 assert.equal(conversationTurnSource.includes('iconicon_file_copy'), true);
+assert.equal(conversationTurnSource.includes(':deep(.turn-action-button *)'), true);
+assert.equal(conversationTurnSource.includes('pointer-events: none'), true);
+assert.equal(conversationTurnSource.includes('z-index: 1'), true);
+assert.equal(conversationTurnSource.includes('.assistant-block:hover .turn__time'), true);
 
 const apiSource = read('api.ts');
 assert.equal(apiSource.includes('stopDealDeskChat'), true);
@@ -66,8 +70,15 @@ assert.equal(chatHookSource.includes("time: '刚刚'"), false);
 assert.equal(pendingTurnSource.includes("time: '刚刚'"), false);
 assert.equal(chatflowAdapterSource.includes("time: '刚刚'"), false);
 assert.equal(chatHookSource.includes('formatDealDeskClockTime'), true);
+assert.equal(chatHookSource.includes('formatDealDeskSessionTime'), true);
 assert.equal(pendingTurnSource.includes('formatDealDeskClockTime'), true);
 assert.equal(chatflowAdapterSource.includes('formatDealDeskClockTime'), true);
+
+const timeSource = read('dealDeskTime.ts');
+assert.equal(timeSource.includes('formatDealDeskSessionTime'), true);
+assert.equal(timeSource.includes('今天 ${clockTime}'), true);
+assert.equal(timeSource.includes('昨天 ${clockTime}'), true);
+assert.equal(timeSource.includes('${month}-${day} ${clockTime}'), true);
 
 const typesSource = read('types.ts');
 assert.equal(typesSource.includes("'failed'"), true);

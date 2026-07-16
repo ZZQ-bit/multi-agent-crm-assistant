@@ -5,6 +5,7 @@ import lombok.Data;
 @Data
 public class DealDeskToolRequest {
     private String keyword;
+    private String objectReference;
     private String customerId;
     private String opportunityId;
     private String contactId;

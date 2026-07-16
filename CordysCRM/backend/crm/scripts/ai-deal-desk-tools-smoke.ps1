@@ -40,6 +40,13 @@ function Assert-ToolCode($name, $response, $expectedCode) {
   Write-Host "PASS $name -> $($response.code)"
 }
 
+function Assert-DataKey($name, $response, $key) {
+  if (-not ($response.data.PSObject.Properties.Name -contains $key)) {
+    $actual = $response | ConvertTo-Json -Depth 20
+    throw "$name missing data key: $key. Response: $actual"
+  }
+}
+
 if ([string]::IsNullOrWhiteSpace($CustomerKeyword)) {
   $CustomerKeyword = From-Utf8Base64 "5Y2O5Lic5pm66YCg6ZuG5Zui"
 }
@@ -68,6 +75,15 @@ $customerId = $customerSearch.data.candidates[0].id
 $opportunitySearch = Invoke-JsonPost "/ai/deal-desk/tools/search-opportunities" $headers @{ keyword = $OpportunityKeyword; limit = 5 }
 Assert-ToolCode "search-opportunities" $opportunitySearch "OK"
 $opportunityId = $opportunitySearch.data.candidates[0].id
+
+$resolvedObject = Invoke-JsonPost "/ai/deal-desk/tools/resolve-crm-object" $headers @{ objectReference = $OpportunityKeyword; limit = 5 }
+Assert-ToolCode "resolve-crm-object" $resolvedObject "OK"
+Assert-DataKey "resolve-crm-object" $resolvedObject "resolvedObject"
+if ($resolvedObject.data.resolvedObject.objectType -ne "opportunity") {
+  $actual = $resolvedObject | ConvertTo-Json -Depth 20
+  throw "resolve-crm-object expected opportunity but got: $actual"
+}
+Write-Host "PASS resolve-crm-object -> opportunity"
 
 $ambiguousSearch = Invoke-JsonPost "/ai/deal-desk/tools/search-opportunities" $headers @{ keyword = $CustomerKeyword; limit = 5 }
 if ($ambiguousSearch.code -notin @("OK", "OBJECT_AMBIGUOUS")) {

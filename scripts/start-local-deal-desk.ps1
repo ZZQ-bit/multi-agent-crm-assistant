@@ -5,6 +5,10 @@
 $ErrorActionPreference = 'Continue'
 $root = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $cordysRoot = Join-Path $root 'CordysCRM'
+$frontendRoot = Join-Path $cordysRoot 'frontend'
+$webRoot = Join-Path $frontendRoot 'packages\web'
+$webDistIndex = Join-Path $webRoot 'dist\index.html'
+$backendStaticIndex = Join-Path $cordysRoot 'backend\app\src\main\resources\static\index.html'
 $logsDir = Join-Path $root '.codex-logs'
 New-Item -ItemType Directory -Force -Path $logsDir | Out-Null
 Set-Location $root
@@ -17,6 +21,82 @@ $redisConf = '/cygdrive/c/opt/cordys/redis/redis.conf'
 function Test-Port($port) {
   $c = Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue
   return [bool]$c
+}
+
+function Get-NewestWriteTimeUtc($paths) {
+  $files = foreach ($path in $paths) {
+    if (-not (Test-Path $path)) { continue }
+    $item = Get-Item $path
+    if ($item.PSIsContainer) {
+      Get-ChildItem -Recurse -File $path -ErrorAction SilentlyContinue
+    } else {
+      $item
+    }
+  }
+  if (-not $files) { return [datetime]::MinValue }
+  return ($files | Sort-Object LastWriteTimeUtc -Descending | Select-Object -First 1).LastWriteTimeUtc
+}
+
+function Test-SameFile($left, $right) {
+  if (-not (Test-Path $left) -or -not (Test-Path $right)) { return $false }
+  return (Get-FileHash $left -Algorithm SHA256).Hash -eq (Get-FileHash $right -Algorithm SHA256).Hash
+}
+
+function Build-WebFrontend {
+  $pnpm = Get-Command pnpm.cmd -ErrorAction SilentlyContinue
+  if (-not $pnpm) { $pnpm = Get-Command pnpm -ErrorAction SilentlyContinue }
+  if (-not $pnpm) { throw 'pnpm not found. Install pnpm before building the Web frontend.' }
+
+  Write-Host '[..] Web source is newer than dist. Building @cordys/web...' -ForegroundColor Yellow
+  Push-Location $frontendRoot
+  try {
+    & $pnpm.Source --filter '@cordys/web' build
+    if ($LASTEXITCODE -ne 0) { throw "Web frontend build failed with exit code $LASTEXITCODE" }
+  } finally {
+    Pop-Location
+  }
+  if (-not (Test-Path $webDistIndex)) { throw "Web build completed without creating $webDistIndex" }
+  Write-Host '[OK] Web frontend build completed' -ForegroundColor Green
+}
+
+function Stop-CordysBackend {
+  $connections = Get-NetTCPConnection -LocalPort 8081 -State Listen -ErrorAction SilentlyContinue
+  if (-not $connections) { return }
+
+  $pids = $connections | ForEach-Object { $_.OwningProcess } | Select-Object -Unique
+  foreach ($processId in $pids) {
+    $process = Get-Process -Id $processId -ErrorAction SilentlyContinue
+    $processInfo = Get-CimInstance Win32_Process -Filter "ProcessId=$processId" -ErrorAction SilentlyContinue
+    if (-not $process -or $process.ProcessName -ne 'java' -or $processInfo.CommandLine -notmatch 'cn\.cordys\.Application') {
+      throw "Port 8081 is occupied by an unrecognized process (PID=$processId). Refusing to stop it automatically."
+    }
+    Write-Host "[..] Stopping stale CordysCRM backend PID=$processId..." -ForegroundColor Yellow
+    Stop-Process -Id $processId -Force
+  }
+
+  $deadline = (Get-Date).AddSeconds(15)
+  while ((Test-Port 8081) -and (Get-Date) -lt $deadline) { Start-Sleep -Milliseconds 250 }
+  if (Test-Port 8081) { throw 'CordysCRM backend did not release port 8081 in 15 seconds.' }
+}
+
+$webSourcePaths = @(
+  (Join-Path $webRoot 'src'),
+  (Join-Path $webRoot 'config'),
+  (Join-Path $webRoot 'public'),
+  (Join-Path $webRoot 'package.json'),
+  (Join-Path $frontendRoot 'package.json'),
+  (Join-Path $frontendRoot 'pnpm-lock.yaml'),
+  (Join-Path $frontendRoot 'pnpm-workspace.yaml')
+)
+$webSourceTime = Get-NewestWriteTimeUtc $webSourcePaths
+$webDistTime = if (Test-Path $webDistIndex) { (Get-Item $webDistIndex).LastWriteTimeUtc } else { [datetime]::MinValue }
+if ($webSourceTime -gt $webDistTime) { Build-WebFrontend }
+else { Write-Host '[OK] Web dist is current' -ForegroundColor Green }
+
+$backendStaticStale = -not (Test-SameFile $webDistIndex $backendStaticIndex)
+if ($backendStaticStale) {
+  Write-Host '[..] Spring Boot static resources are older than Web dist.' -ForegroundColor Yellow
+  if (Test-Port 8081) { Stop-CordysBackend }
 }
 
 if (Test-Port 3306) { Write-Host '[OK] MySQL already running on 3306' -ForegroundColor Green }
@@ -60,18 +140,18 @@ else {
   }
   Write-Host ''
   if ($up) { Write-Host '[OK] Backend is up' -ForegroundColor Green }
-  else     { Write-Host '[!!] Backend did not come up in 90s' -ForegroundColor Red }
+  else     { Write-Host '[!!] Backend did not come up in 180s' -ForegroundColor Red }
 }
 
 # 联调 Dify Cloud 时需要一个可被外网访问的 HTTPS 隧道。
 # 当前推荐使用固定 ngrok 域名：
-#   ngrok http --url=your-ngrok-or-domain.example.com 8081
+#   ngrok http --url=your-domain.example.com 8081
 # cloudflared quick tunnel 仅作为备用方案；如需使用，再手动运行：
 #   powershell -ExecutionPolicy Bypass -File scripts\start-tunnel.ps1
 $tunnelScript = Join-Path $PSScriptRoot 'start-tunnel.ps1'
 if (Test-Path $tunnelScript) {
   Write-Host '[--] Dify Cloud tunnel is not auto-started by this script.' -ForegroundColor DarkYellow
-  Write-Host '     Preferred: ngrok http --url=your-ngrok-or-domain.example.com 8081' -ForegroundColor DarkYellow
+  Write-Host '     Preferred: ngrok http --url=your-domain.example.com 8081' -ForegroundColor DarkYellow
   Write-Host '     Fallback:  powershell -ExecutionPolicy Bypass -File scripts\start-tunnel.ps1' -ForegroundColor DarkYellow
 } else {
   Write-Host '[--] start-tunnel.ps1 not found, skipping fallback cloudflared tunnel' -ForegroundColor DarkYellow
@@ -79,5 +159,4 @@ if (Test-Path $tunnelScript) {
 
 Write-Host ''
 Write-Host 'Open: http://localhost:8081/#/login  (admin / CordysCRM)' -ForegroundColor Cyan
-Write-Host '多Agent智能助手: http://localhost:8081/#/agent/deal-desk' -ForegroundColor Cyan
-
+Write-Host '多Agent智能助手: http://localhost:8081/#/ai-deal-desk/index' -ForegroundColor Cyan

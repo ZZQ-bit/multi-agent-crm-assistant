@@ -1,6 +1,6 @@
 $ErrorActionPreference = 'Stop'
-$propertiesPath = Join-Path $PSScriptRoot "..\CordysCRM\backend\app\src\main\resources\commons.properties"
-$sqlPath = Resolve-Path (Join-Path $PSScriptRoot "..\demo-data\seed-deal-desk-extra-data.sql")
+$propertiesPath = Join-Path $PSScriptRoot "..\runtime\cordys\cordys-crm.properties"
+$sqlPath = Resolve-Path (Join-Path $PSScriptRoot "..\runtime\mysql\seed-deal-desk-extra-data.sql")
 $mysqlCli = "C:\Program Files\MySQL\MySQL Server 8.4\bin\mysql.exe"
 
 if (-not (Test-Path $propertiesPath)) {

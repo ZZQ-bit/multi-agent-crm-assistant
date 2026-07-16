@@ -25,17 +25,23 @@
       <n-scrollbar class="history-panel__scroll">
         <div v-for="group in groupedSessions" :key="group.label" class="history-group">
           <div class="history-group__label">{{ group.label }}</div>
-          <button
+          <div
             v-for="session in group.items"
             :key="session.id"
-            type="button"
             class="history-item"
             :class="{ 'history-item--active': session.id === activeSessionId }"
             @click="$emit('selectSession', session.id)"
           >
-            <span class="history-item__title">{{ session.title }}</span>
-            <span class="history-item__time">{{ session.updatedAt }}</span>
-          </button>
+            <button type="button" class="history-item__main">
+              <span class="history-item__title">{{ session.title }}</span>
+              <span class="history-item__time">{{ session.updatedAt }}</span>
+            </button>
+            <n-button class="history-item__delete" quaternary circle size="tiny" @click.stop="$emit('deleteSession', session.id)">
+              <template #icon>
+                <TrashOutline />
+              </template>
+            </n-button>
+          </div>
         </div>
       </n-scrollbar>
     </template>
@@ -44,7 +50,7 @@
 
 <script setup lang="ts">
   import { NButton, NScrollbar } from 'naive-ui';
-  import { AddOutline, ChevronBackOutline, ChevronForwardOutline } from '@vicons/ionicons5';
+  import { AddOutline, ChevronBackOutline, ChevronForwardOutline, TrashOutline } from '@vicons/ionicons5';
 
   import { useI18n } from '@lib/shared/hooks/useI18n';
 
@@ -60,6 +66,7 @@
     (e: 'selectSession', sessionId: string): void;
     (e: 'newSession'): void;
     (e: 'toggleCollapse'): void;
+    (e: 'deleteSession', sessionId: string): void;
   }>();
 
   const { t } = useI18n();
@@ -102,6 +109,7 @@
 
   .history-panel__header {
     display: flex;
+    position: relative;
     align-items: center;
     justify-content: space-between;
     margin-bottom: 26px;
@@ -141,9 +149,9 @@
 
   .history-item {
     display: flex;
+    position: relative;
     align-items: center;
     justify-content: space-between;
-    gap: 12px;
     width: 100%;
     min-height: 64px;
     margin-bottom: 12px;
@@ -152,6 +160,7 @@
     border-radius: 8px;
     background: var(--text-n10);
     text-align: left;
+    cursor: pointer;
     transition: all 0.2s ease;
     &:hover {
       border-color: var(--primary-4);
@@ -161,6 +170,44 @@
       border-color: #27c3df;
       background: #f1fdff;
     }
+  }
+
+  .history-item__main {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    width: 100%;
+    min-width: 0;
+    border: 0;
+    padding: 0;
+    background: transparent;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .history-item__delete {
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    opacity: 0;
+    pointer-events: none;
+    color: var(--text-n4);
+    transition: opacity 0.2s ease, color 0.2s ease;
+
+    &:hover {
+      color: #ef4444;
+    }
+  }
+
+  .history-item:hover .history-item__delete {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .history-item:hover .history-item__time {
+    opacity: 0;
   }
 
   .history-item__title {
@@ -179,5 +226,6 @@
     font-size: 14px;
     color: var(--text-n4);
     line-height: 22px;
+    transition: opacity 0.2s ease;
   }
 </style>

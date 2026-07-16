@@ -57,6 +57,7 @@ public class AiDealDeskDifyToolController {
         return switch (StringUtils.trimToEmpty(toolName)) {
             case "search-customers" -> aiDealDeskToolService.searchCustomers(safeRequest);
             case "search-opportunities" -> aiDealDeskToolService.searchOpportunities(safeRequest);
+            case "resolve-crm-object" -> aiDealDeskToolService.resolveCrmObject(safeRequest);
             case "get-customer-context" -> aiDealDeskToolService.getCustomerContext(safeRequest);
             case "get-opportunity-context" -> aiDealDeskToolService.getOpportunityContext(safeRequest);
             case "create-follow-record" -> aiDealDeskToolService.createFollowRecord(safeRequest);

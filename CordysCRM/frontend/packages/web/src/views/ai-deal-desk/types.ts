@@ -16,17 +16,29 @@ export interface DealDeskMentionOption extends DealDeskReference {
 }
 
 export type DealDeskProcessEventType =
-  | 'task_identified'
+  | 'task_understanding'
+  | 'attachment_analysis'
+  | 'crm_retrieval'
+  | 'knowledge_retrieval'
+  | 'external_research'
+  | 'sales_analysis'
+  | 'finance_analysis'
+  | 'delivery_analysis'
+  | 'legal_analysis'
+  | 'analytics_analysis'
+  | 'answer_generation'
   | 'object_required'
+  | 'confirmation_required'
+  | 'writeback_completed'
+  | 'failed'
+  // 兼容已保存的旧会话，V3 不再生成以下事件类型。
+  | 'task_identified'
   | 'object_selected'
   | 'context_loaded'
   | 'memory_used'
   | 'rule_checked'
   | 'risk_found'
-  | 'suggestion_generated'
-  | 'confirmation_required'
-  | 'writeback_completed'
-  | 'failed';
+  | 'suggestion_generated';
 
 export interface DealDeskProcessEvent {
   id: string;
@@ -73,6 +85,7 @@ export interface DealDeskAssistantReply {
 
 export interface DealDeskSession {
   id: string;
+  remoteId?: string;
   title: string;
   updatedAt: string;
   group: 'today' | 'yesterday' | 'earlier';
@@ -80,6 +93,49 @@ export interface DealDeskSession {
   boundObject?: DealDeskReference | null;
   activeWriteback?: DealDeskWritebackPayload | null;
   conversationId?: string | null;
+}
+
+export interface DealDeskStoredMessagePayload {
+  id: string;
+  role: 'user' | 'assistant';
+  content?: string;
+  referencesJson?: string;
+  processEventsJson?: string;
+  writebackJson?: string;
+  boundObjectJson?: string;
+  difyMessageId?: string;
+  status?: 'default' | 'generating' | 'failed';
+  createTime?: number;
+}
+
+export interface DealDeskStoredConversationPayload {
+  id: string;
+  title: string;
+  difyConversationId?: string;
+  boundObjectJson?: string;
+  lastMessageText?: string;
+  messageCount?: number;
+  createTime?: number;
+  updateTime?: number;
+  messages?: DealDeskStoredMessagePayload[];
+}
+
+export interface DealDeskConversationSavePayload {
+  title?: string;
+  difyConversationId?: string | null;
+  boundObjectJson?: string | null;
+  lastMessageText?: string | null;
+}
+
+export interface DealDeskMessageSavePayload {
+  role: 'user' | 'assistant';
+  content: string;
+  referencesJson?: string | null;
+  processEventsJson?: string | null;
+  writebackJson?: string | null;
+  boundObjectJson?: string | null;
+  difyMessageId?: string | null;
+  status?: 'default' | 'generating' | 'failed';
 }
 
 export type DealDeskTurnType =

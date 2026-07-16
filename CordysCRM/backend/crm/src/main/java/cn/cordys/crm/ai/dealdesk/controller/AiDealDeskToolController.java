@@ -36,6 +36,13 @@ public class AiDealDeskToolController {
     }
 
     @NoResultHolder
+    @PostMapping(value = "/resolve-crm-object", produces = MediaType.APPLICATION_JSON_VALUE + ";charset=UTF-8")
+    @Operation(summary = "多Agent智能助手 解析 CRM 客户或商机对象")
+    public DealDeskToolResponse resolveCrmObject(@RequestBody DealDeskToolRequest request) {
+        return aiDealDeskToolService.resolveCrmObject(request);
+    }
+
+    @NoResultHolder
     @PostMapping(value = "/get-customer-context", produces = MediaType.APPLICATION_JSON_VALUE + ";charset=UTF-8")
     @Operation(summary = "多Agent智能助手 客户上下文工具")
     public DealDeskToolResponse getCustomerContext(@RequestBody DealDeskToolRequest request) {

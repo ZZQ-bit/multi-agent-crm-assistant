@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { resolve } from 'node:path';
 
-const yamlPath = resolve('AI Deal Desk - V3 Stable Enhanced.yml');
+const yamlPath = resolve('chatflows/ai-deal-desk-v3.example.yml');
 
 const pythonScript = `
 from pathlib import Path
@@ -62,11 +62,11 @@ ledger = ledger_main(
 def call_protocol(query):
     try:
         raw = protocol_main(
-            simple_answer="",
-            image_answer="",
+            direct_answer="### 结论\\n该商机当前仍处于新建阶段。",
             gap_answer="",
-            business_answer="### 结论\\n该商机当前仍处于新建阶段。",
+            crm_light_answer="",
             task_type="progress_summary",
+            resolution_status="resolved",
             target_object_json=ledger.get("target_object_json", "{}"),
             original_query=query,
             chart_blocks_text=ledger.get("chart_blocks_text", ""),

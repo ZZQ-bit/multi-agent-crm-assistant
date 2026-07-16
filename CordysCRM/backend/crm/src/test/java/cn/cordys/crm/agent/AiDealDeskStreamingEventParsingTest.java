@@ -48,8 +48,8 @@ class AiDealDeskStreamingEventParsingTest {
 
         List<Map<String, Object>> frames = new ArrayList<>();
         String[] payloads = {
-                "{\"event\":\"node_started\",\"node\":{\"id\":\"node-sales-agent\",\"title\":\"销售运营 Agent\",\"data\":{\"type\":\"llm\"}}}",
-                "{\"event\":\"node_finished\",\"node\":{\"id\":\"node-sales-final\",\"title\":\"最终输出 - 销售运营任务\",\"data\":{\"type\":\"answer\"}},\"data\":{\"status\":\"succeeded\"}}",
+                "{\"event\":\"node_started\",\"node\":{\"id\":\"sales_agent\",\"title\":\"可自由修改的节点标题\",\"data\":{\"type\":\"llm\"}}}",
+                "{\"event\":\"node_finished\",\"node\":{\"id\":\"simple_answer\",\"title\":\"可自由修改的回答标题\",\"data\":{\"type\":\"answer\"}},\"data\":{\"status\":\"succeeded\"}}",
                 "{\"event\":\"message\",\"answer\":\"first chunk\",\"conversation_id\":\"conv-1\",\"message_id\":\"msg-1\",\"task_id\":\"task-1\"}"
         };
 
@@ -62,14 +62,14 @@ class AiDealDeskStreamingEventParsingTest {
 
         assertEquals("process_event", frames.get(0).get("type"));
         Map<String, Object> startedEvent = (Map<String, Object>) frames.get(0).get("event");
-        assertEquals("node-sales-agent", startedEvent.get("id"));
-        assertEquals("suggestion_generated", startedEvent.get("type"));
+        assertEquals("sales_agent", startedEvent.get("id"));
+        assertEquals("sales_analysis", startedEvent.get("type"));
         assertEquals("running", startedEvent.get("status"));
 
         assertEquals("process_event", frames.get(1).get("type"));
         Map<String, Object> finishedEvent = (Map<String, Object>) frames.get(1).get("event");
-        assertEquals("node-sales-final", finishedEvent.get("id"));
-        assertEquals("suggestion_generated", finishedEvent.get("type"));
+        assertEquals("simple_answer", finishedEvent.get("id"));
+        assertEquals("answer_generation", finishedEvent.get("type"));
         assertEquals("completed", finishedEvent.get("status"));
 
         assertEquals("answer_delta", frames.get(2).get("type"));
@@ -248,6 +248,66 @@ class AiDealDeskStreamingEventParsingTest {
         }
     }
 
+    @Test
+    void shouldKeepRealtimeMarkdownAndRecoverProtocolFromWorkflowNodeOutputs() throws Exception {
+        AiDealDeskService service = new AiDealDeskService();
+        Field difyApiKeyField = AiDealDeskService.class.getDeclaredField("difyApiKey");
+        difyApiKeyField.setAccessible(true);
+        difyApiKeyField.set(service, "test-key");
+
+        HttpServer server = HttpServer.create(new InetSocketAddress(0), 0);
+        server.createContext("/v1/chat-messages", exchange -> {
+            exchange.getResponseHeaders().add("Content-Type", "text/event-stream;charset=UTF-8");
+            String payload = """
+                    data: {"event":"workflow_started","workflow_run_id":"wf-1"}
+
+                    data: {"event":"node_finished","data":{"node_id":"task_plan_normalize","status":"succeeded","outputs":{"task_type":"finance_check","resolution_status":"resolved"}}}
+
+                    data: {"event":"node_finished","data":{"node_id":"evidence_ledger","status":"succeeded","outputs":{"target_object_json":"{\\\"objectType\\\":\\\"opportunity\\\",\\\"objectId\\\":\\\"opp-1\\\",\\\"objectName\\\":\\\"华东智造集团AI客服升级项目\\\"}"}}}
+
+                    data: {"event":"message","answer":"第一段 Markdown。","conversation_id":"conv-1","message_id":"msg-1","task_id":"task-1"}
+
+                    data: {"event":"message","answer":"第二段 Markdown。","conversation_id":"conv-1","message_id":"msg-1","task_id":"task-1"}
+
+                    data: {"event":"workflow_finished","data":{"status":"succeeded","outputs":{"answer":"第一段 Markdown。第二段 Markdown。"}}}
+
+                    """;
+            byte[] response = payload.getBytes(StandardCharsets.UTF_8);
+            exchange.sendResponseHeaders(200, response.length);
+            exchange.getResponseBody().write(response);
+            exchange.close();
+        });
+        server.start();
+
+        try {
+            Field difyBaseUrlField = AiDealDeskService.class.getDeclaredField("difyBaseUrl");
+            difyBaseUrlField.setAccessible(true);
+            difyBaseUrlField.set(service, "http://127.0.0.1:" + server.getAddress().getPort() + "/v1");
+
+            DealDeskChatRequest request = new DealDeskChatRequest();
+            request.setQuery("分析这个商机的付款风险");
+            ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+
+            service.streamChat(request, outputStream);
+
+            String output = outputStream.toString(StandardCharsets.UTF_8);
+            int firstDeltaIndex = output.indexOf("\"text\":\"第一段 Markdown。\"");
+            int secondDeltaIndex = output.indexOf("\"text\":\"第二段 Markdown。\"");
+            int finalIndex = output.indexOf("\"type\":\"final\"");
+
+            assertTrue(firstDeltaIndex >= 0);
+            assertTrue(secondDeltaIndex > firstDeltaIndex);
+            assertTrue(finalIndex > secondDeltaIndex);
+            assertTrue(output.contains("\"answerText\":\"第一段 Markdown。第二段 Markdown。\""));
+            assertTrue(output.contains("\"turnType\":\"text_analysis\""));
+            assertTrue(output.contains("\"objectType\":\"opportunity\""));
+            assertTrue(output.contains("\"objectId\":\"opp-1\""));
+            assertTrue(output.contains("\"objectName\":\"华东智造集团AI客服升级项目\""));
+        } finally {
+            server.stop(0);
+        }
+    }
+
     @SuppressWarnings("unchecked")
     @Test
     void shouldExtractNodeEventsFromStreamingPayload() throws Exception {
@@ -257,13 +317,16 @@ class AiDealDeskStreamingEventParsingTest {
 
         String sseBody = String.join("\n",
                 "data: {\"event\":\"workflow_started\",\"workflow_run_id\":\"wf-1\"}",
-                "data: {\"event\":\"node_started\",\"node\":{\"id\":\"node-task-start\",\"title\":\"主 Agent - 参数抽取\",\"data\":{\"type\":\"parameter-extractor\"}}}",
-                "data: {\"event\":\"node_finished\",\"node\":{\"id\":\"node-task-finish\",\"title\":\"主 Agent - 路由判断\",\"data\":{\"type\":\"if-else\"}},\"data\":{\"status\":\"succeeded\"}}",
-                "data: {\"event\":\"node_started\",\"node\":{\"id\":\"node-context-start\",\"title\":\"主 Agent - 上下文标准化\",\"data\":{\"type\":\"code\"}}}",
-                "data: {\"event\":\"node_finished\",\"node\":{\"id\":\"node-context-finish\",\"title\":\"规则知识库检索\",\"data\":{\"type\":\"knowledge-retrieval\"}},\"data\":{\"status\":\"succeeded\"}}",
-                "data: {\"event\":\"node_finished\",\"node\":{\"id\":\"node-rule-finish\",\"title\":\"规则召回结果标准化\",\"data\":{\"type\":\"code\"}},\"data\":{\"status\":\"succeeded\"}}",
-                "data: {\"event\":\"node_started\",\"node\":{\"id\":\"node-sales-agent\",\"title\":\"销售运营 Agent\",\"data\":{\"type\":\"llm\"}}}",
-                "data: {\"event\":\"node_finished\",\"node\":{\"id\":\"node-sales-final\",\"title\":\"最终输出 - 销售运营任务\",\"data\":{\"type\":\"answer\"}},\"data\":{\"status\":\"succeeded\"}}",
+                "data: {\"event\":\"node_started\",\"data\":{\"node_id\":\"task_planner\",\"title\":\"任务规划\",\"node_type\":\"agent\"}}",
+                "data: {\"event\":\"node_finished\",\"data\":{\"node_id\":\"task_planner\",\"title\":\"任务规划\",\"status\":\"succeeded\"}}",
+                "data: {\"event\":\"node_started\",\"node\":{\"id\":\"crm_read_request\",\"title\":\"CRM 数据获取\"}}",
+                "data: {\"event\":\"node_finished\",\"node\":{\"id\":\"crm_read_request\",\"title\":\"CRM 数据获取\"},\"data\":{\"status\":\"succeeded\"}}",
+                "data: {\"event\":\"node_started\",\"node\":{\"id\":\"deal_rules_knowledge\",\"title\":\"知识检索\"}}",
+                "data: {\"event\":\"node_finished\",\"node\":{\"id\":\"deal_rules_knowledge\",\"title\":\"知识检索\"},\"data\":{\"status\":\"succeeded\"}}",
+                "data: {\"event\":\"node_started\",\"node\":{\"id\":\"sales_agent\",\"title\":\"销售 Agent\"}}",
+                "data: {\"event\":\"node_finished\",\"node\":{\"id\":\"sales_agent\",\"title\":\"销售 Agent\"},\"data\":{\"status\":\"succeeded\"}}",
+                "data: {\"event\":\"node_started\",\"node\":{\"id\":\"business_answer_agent\",\"title\":\"综合回答\"}}",
+                "data: {\"event\":\"node_finished\",\"node\":{\"id\":\"business_answer_agent\",\"title\":\"综合回答\"},\"data\":{\"status\":\"succeeded\"}}",
                 "data: {\"event\":\"message\",\"answer\":\"最终回复\",\"conversation_id\":\"conv-1\",\"message_id\":\"msg-1\"}",
                 "data: {\"event\":\"workflow_finished\",\"data\":{\"outputs\":{\"answer\":\"最终回复\"}}}"
         );
@@ -278,44 +341,46 @@ class AiDealDeskStreamingEventParsingTest {
         assertEquals("conv-1", payload.get("conversation_id"));
         assertEquals("msg-1", payload.get("message_id"));
         assertFalse(processEvents.isEmpty());
-        assertEquals("task_identified", processEvents.get(0).get("type"));
+        assertEquals("task_understanding", processEvents.get(0).get("type"));
         assertTrue(processEvents.stream().anyMatch(event ->
-                "context_loaded".equals(event.get("type")) && "completed".equals(event.get("status"))));
+                "crm_retrieval".equals(event.get("type")) && "completed".equals(event.get("status"))));
         assertTrue(processEvents.stream().anyMatch(event ->
-                "rule_checked".equals(event.get("type")) && "completed".equals(event.get("status"))));
+                "knowledge_retrieval".equals(event.get("type")) && "completed".equals(event.get("status"))));
         assertTrue(processEvents.stream().anyMatch(event ->
-                "suggestion_generated".equals(event.get("type")) && "completed".equals(event.get("status"))));
+                "sales_analysis".equals(event.get("type")) && "completed".equals(event.get("status"))));
+        assertTrue(processEvents.stream().anyMatch(event ->
+                "answer_generation".equals(event.get("type")) && "completed".equals(event.get("status"))));
     }
 
     @SuppressWarnings("unchecked")
     @Test
-    void shouldMapCurrentV3CrmToolNodesToContextLoadedEvents() throws Exception {
+    void shouldMapCurrentV3NodeIdsWithoutDependingOnTitles() throws Exception {
         AiDealDeskService service = new AiDealDeskService();
         Method method = AiDealDeskService.class.getDeclaredMethod("adaptStreamingFrame", String.class);
         method.setAccessible(true);
 
-        String[] contextNodeTitles = {
-                "主 Agent - CRM 工具调用规划",
-                "主 Agent - CRM 工具调用判断",
-                "CRM Tool API 请求",
-                "主 Agent - CRM 上下文标准化"
-        };
+        Map<String, String> visibleNodes = Map.of(
+                "task_planner", "task_understanding",
+                "crm_read_request", "crm_retrieval",
+                "deal_rules_knowledge", "knowledge_retrieval",
+                "external_intel_agent", "external_research"
+        );
 
-        for (String nodeTitle : contextNodeTitles) {
+        for (Map.Entry<String, String> visibleNode : visibleNodes.entrySet()) {
             Map<String, Object> frame = (Map<String, Object>) method.invoke(
                     service,
-                    "{\"event\":\"node_started\",\"node\":{\"id\":\"node-context\",\"title\":\"" + nodeTitle + "\",\"data\":{\"type\":\"code\"}}}"
+                    "{\"event\":\"node_started\",\"node\":{\"id\":\"" + visibleNode.getKey()
+                            + "\",\"title\":\"任意中文标题\",\"data\":{\"type\":\"code\"}}}"
             );
 
             assertEquals("process_event", frame.get("type"));
-            assertEquals("context_loaded", ((Map<String, Object>) frame.get("event")).get("type"));
+            assertEquals(visibleNode.getValue(), ((Map<String, Object>) frame.get("event")).get("type"));
             assertEquals("running", ((Map<String, Object>) frame.get("event")).get("status"));
-            assertEquals("正在读取相关业务资料", ((Map<String, Object>) frame.get("event")).get("text"));
         }
 
         Map<String, Object> completedFrame = (Map<String, Object>) method.invoke(
                 service,
-                "{\"event\":\"node_finished\",\"node\":{\"id\":\"node-crm-context\",\"title\":\"主 Agent - CRM 上下文标准化\",\"data\":{\"type\":\"code\"}},\"data\":{\"status\":\"succeeded\"}}"
+                "{\"event\":\"node_finished\",\"data\":{\"node_id\":\"crm_read_request\",\"title\":\"已改名的节点\",\"status\":\"succeeded\"}}"
         );
         Map<String, Object> skippedFrame = (Map<String, Object>) method.invoke(
                 service,
@@ -323,7 +388,7 @@ class AiDealDeskStreamingEventParsingTest {
         );
 
         assertEquals("process_event", completedFrame.get("type"));
-        assertEquals("context_loaded", ((Map<String, Object>) completedFrame.get("event")).get("type"));
+        assertEquals("crm_retrieval", ((Map<String, Object>) completedFrame.get("event")).get("type"));
         assertEquals("completed", ((Map<String, Object>) completedFrame.get("event")).get("status"));
         assertEquals(null, skippedFrame);
     }
@@ -951,35 +1016,38 @@ class AiDealDeskStreamingEventParsingTest {
 
     @SuppressWarnings("unchecked")
     @Test
-    void shouldOnlyCompleteSuggestionAfterFinalOutputNode() throws Exception {
+    void shouldTrackDomainAnalysisStartAndFinishWithTheSameEventId() throws Exception {
         AiDealDeskService service = new AiDealDeskService();
         Method method = AiDealDeskService.class.getDeclaredMethod("adaptStreamingFrame", String.class);
         method.setAccessible(true);
 
         Map<String, Object> runningFrame = (Map<String, Object>) method.invoke(
                 service,
-                "{\"event\":\"node_started\",\"node\":{\"id\":\"node-sales-agent\",\"title\":\"销售运营 Agent\",\"data\":{\"type\":\"llm\"}}}"
+                "{\"event\":\"node_started\",\"node\":{\"id\":\"sales_agent\",\"title\":\"销售分析\",\"data\":{\"type\":\"llm\"}}}"
         );
         Map<String, Object> finishedAgentFrame = (Map<String, Object>) method.invoke(
                 service,
-                "{\"event\":\"node_finished\",\"node\":{\"id\":\"node-sales-agent\",\"title\":\"销售运营 Agent\",\"data\":{\"type\":\"llm\"}},\"data\":{\"status\":\"succeeded\"}}"
+                "{\"event\":\"node_finished\",\"node\":{\"id\":\"sales_agent\",\"title\":\"销售分析\",\"data\":{\"type\":\"llm\"}},\"data\":{\"status\":\"succeeded\"}}"
         );
         Map<String, Object> finalOutputFrame = (Map<String, Object>) method.invoke(
                 service,
-                "{\"event\":\"node_finished\",\"node\":{\"id\":\"node-sales-final\",\"title\":\"最终输出 - 销售运营任务\",\"data\":{\"type\":\"answer\"}},\"data\":{\"status\":\"succeeded\"}}"
+                "{\"event\":\"node_finished\",\"node\":{\"id\":\"simple_answer\",\"title\":\"回答\",\"data\":{\"type\":\"answer\"}},\"data\":{\"status\":\"succeeded\"}}"
         );
 
         assertEquals("process_event", runningFrame.get("type"));
-        assertEquals("suggestion_generated", ((Map<String, Object>) runningFrame.get("event")).get("type"));
+        assertEquals("sales_analysis", ((Map<String, Object>) runningFrame.get("event")).get("type"));
         assertEquals("running", ((Map<String, Object>) runningFrame.get("event")).get("status"));
-        assertEquals("正在生成结论和下一步建议", ((Map<String, Object>) runningFrame.get("event")).get("text"));
+        assertEquals("正在进行销售分析", ((Map<String, Object>) runningFrame.get("event")).get("text"));
 
-        assertEquals(null, finishedAgentFrame);
+        assertEquals("process_event", finishedAgentFrame.get("type"));
+        assertEquals("sales_agent", ((Map<String, Object>) finishedAgentFrame.get("event")).get("id"));
+        assertEquals("sales_analysis", ((Map<String, Object>) finishedAgentFrame.get("event")).get("type"));
+        assertEquals("completed", ((Map<String, Object>) finishedAgentFrame.get("event")).get("status"));
 
         assertEquals("process_event", finalOutputFrame.get("type"));
-        assertEquals("suggestion_generated", ((Map<String, Object>) finalOutputFrame.get("event")).get("type"));
+        assertEquals("answer_generation", ((Map<String, Object>) finalOutputFrame.get("event")).get("type"));
         assertEquals("completed", ((Map<String, Object>) finalOutputFrame.get("event")).get("status"));
-        assertEquals("已生成结论和下一步建议", ((Map<String, Object>) finalOutputFrame.get("event")).get("text"));
+        assertEquals("已生成回答", ((Map<String, Object>) finalOutputFrame.get("event")).get("text"));
     }
 
     @SuppressWarnings("unchecked")
@@ -991,12 +1059,13 @@ class AiDealDeskStreamingEventParsingTest {
 
         Map<String, Object> finalOutputFrame = (Map<String, Object>) method.invoke(
                 service,
-                "{\"event\":\"node_finished\",\"node\":{\"id\":\"node-final\",\"title\":\"最终输出 - 多Agent智能助手 业务判断\",\"data\":{\"type\":\"answer\"}},\"data\":{\"status\":\"succeeded\"}}"
+                "{\"event\":\"node_finished\",\"node\":{\"id\":\"business_answer_agent\",\"title\":\"任意标题\",\"data\":{\"type\":\"answer\"}},\"data\":{\"status\":\"succeeded\"}}"
         );
 
         assertEquals("process_event", finalOutputFrame.get("type"));
-        assertEquals("suggestion_generated", ((Map<String, Object>) finalOutputFrame.get("event")).get("type"));
+        assertEquals("answer_generation", ((Map<String, Object>) finalOutputFrame.get("event")).get("type"));
         assertEquals("completed", ((Map<String, Object>) finalOutputFrame.get("event")).get("status"));
+        assertEquals("已生成结论", ((Map<String, Object>) finalOutputFrame.get("event")).get("text"));
     }
 
     @SuppressWarnings("unchecked")
@@ -1008,13 +1077,13 @@ class AiDealDeskStreamingEventParsingTest {
 
         Map<String, Object> failedFrame = (Map<String, Object>) method.invoke(
                 service,
-                "{\"event\":\"node_finished\",\"node\":{\"id\":\"node-context-fail\",\"title\":\"规则知识库检索\",\"data\":{\"type\":\"knowledge-retrieval\"}},\"data\":{\"status\":\"failed\"}}"
+                "{\"event\":\"node_finished\",\"node\":{\"id\":\"deal_rules_knowledge\",\"title\":\"知识检索\",\"data\":{\"type\":\"knowledge-retrieval\"}},\"data\":{\"status\":\"failed\"}}"
         );
 
         assertEquals("process_event", failedFrame.get("type"));
-        assertEquals("failed", ((Map<String, Object>) failedFrame.get("event")).get("type"));
+        assertEquals("knowledge_retrieval", ((Map<String, Object>) failedFrame.get("event")).get("type"));
         assertEquals("failed", ((Map<String, Object>) failedFrame.get("event")).get("status"));
-        assertEquals("暂时无法完成本轮处理", ((Map<String, Object>) failedFrame.get("event")).get("text"));
+        assertEquals("业务规则检索失败", ((Map<String, Object>) failedFrame.get("event")).get("text"));
     }
 
     @SuppressWarnings("unchecked")

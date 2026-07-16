@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 
-const yamlPath = resolve('AI Deal Desk - V3 Stable Enhanced.yml');
+const yamlPath = resolve('chatflows/ai-deal-desk-v3.example.yml');
 
 const extractResult = spawnSync(
   'python',
@@ -85,6 +85,11 @@ try {
     'evidence_router',
     'crm_read_request',
     'crm_evidence',
+    'knowledge_context_prepare',
+    'knowledge_policy_gate',
+    'knowledge_query_decider',
+    'query_rewrite',
+    'knowledge_gate',
     'knowledge_evidence',
     'external_evidence',
     'attachment_evidence',
@@ -115,12 +120,22 @@ try {
   assert.ok(hasEdge('attachment_context', 'source', 'input_parse'), 'attachment context should feed input parsing');
   assert.ok(hasEdge('conversation_context', 'source', 'task_planner'), 'conversation context should feed Planner');
   assert.ok(hasEdge('task_plan_normalize', 'source', 'task_type_gate'), 'normalized plan should feed task gate');
-  assert.ok(hasEdge('task_type_gate', 'general_chat', 'simple_answer'), 'general chat should bypass business chain');
+  assert.ok(hasEdge('task_type_gate', 'general_chat', 'protocol_adapter'), 'Planner direct general answer should bypass the business chain');
   assert.ok(hasEdge('task_type_gate', 'image_answer', 'image_answer'), 'image answer should bypass business chain');
   assert.ok(hasEdge('task_type_gate', 'business_task', 'evidence_router'), 'business tasks should enter evidence router');
   assert.ok(hasEdge('agent_router', 'crm_light_answer', 'crm_light_answer'), 'CRM lightweight reads should route to the light answer node');
   assert.ok(hasEdge('crm_light_answer', 'source', 'protocol_adapter'), 'CRM light answers should use the unified protocol adapter');
   assert.ok(hasEdge('protocol_adapter', 'source', 'final_answer'), 'final output should come from unified protocol adapter');
+  assert.ok(hasEdge('crm_evidence', 'source', 'knowledge_context_prepare'), 'CRM evidence should feed knowledge context preparation');
+  assert.ok(hasEdge('attachment_evidence', 'source', 'knowledge_context_prepare'), 'attachment evidence should feed knowledge context preparation');
+  assert.ok(hasEdge('knowledge_context_prepare', 'source', 'knowledge_policy_gate'), 'knowledge policy should be evaluated only after CRM and attachment evidence are ready');
+  assert.ok(hasEdge('knowledge_policy_gate', 'need_knowledge', 'knowledge_query_decider'), 'eligible Planner policies should enter the semantic knowledge decision');
+  assert.ok(hasEdge('knowledge_query_decider', 'source', 'query_rewrite'), 'semantic knowledge decision should feed deterministic validation');
+  assert.ok(hasEdge('query_rewrite', 'source', 'knowledge_gate'), 'validated decision should gate actual retrieval');
+
+  const queryValidator = nodeById.get('query_rewrite');
+  assert.doesNotMatch(queryValidator?.data?.code || '', /TASK_TERMS/, 'knowledge validation must not use a fixed task-term dictionary');
+  assert.match(queryValidator?.data?.code || '', /MAX_CHARS\s*=\s*260/, 'knowledge query should remain capped at 260 characters');
 
   const imageSummaryNode = nodeById.get('attachment_image_summary');
   assert.deepEqual(

@@ -226,7 +226,7 @@ const quickAnswerWithBusinessSummaryLabels = adaptChatflowPayloadToAssistantRepl
 
 assert.equal(
   quickAnswerWithBusinessSummaryLabels.turn.process?.summary,
-  '已完成 3 项检查：任务识别、资料读取、建议生成'
+  '已完成 3 项处理'
 );
 assert.deepEqual(
   quickAnswerWithBusinessSummaryLabels.turn.process?.events.map((event) => event.text),
@@ -263,11 +263,11 @@ const processWithDuplicateStatuses = adaptChatflowPayloadToAssistantReply({
   turnType: 'text_analysis',
   answerText: 'hello',
   processEvents: [
-    { id: 'rule-running', type: 'rule_checked', status: 'running', text: 'running' },
-    { id: 'rule-completed', type: 'rule_checked', status: 'completed', text: 'completed' },
-    { id: 'rule-warning', type: 'rule_checked', status: 'warning', text: 'warning' },
-    { id: 'context-failed', type: 'context_loaded', status: 'failed', text: 'failed' },
-    { id: 'context-completed', type: 'context_loaded', status: 'completed', text: 'completed' },
+    { id: 'rule-node', type: 'rule_checked', status: 'running', text: 'running' },
+    { id: 'rule-node', type: 'rule_checked', status: 'completed', text: 'completed' },
+    { id: 'rule-node', type: 'rule_checked', status: 'warning', text: 'warning' },
+    { id: 'context-node', type: 'context_loaded', status: 'failed', text: 'failed' },
+    { id: 'context-node', type: 'context_loaded', status: 'completed', text: 'completed' },
   ],
 });
 

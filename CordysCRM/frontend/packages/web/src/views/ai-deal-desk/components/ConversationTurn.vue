@@ -32,14 +32,16 @@
           </div>
         </div>
         <div class="turn-actions turn-actions--user">
-          <n-tooltip v-if="canCopyTurn" trigger="hover" :delay="300">
-            <template #trigger>
-              <button type="button" class="turn-action-button turn-copy-button" :aria-label="t('common.copy')" @click.stop="copyTurnText">
-                <CrmIcon type="iconicon_file_copy" :size="15" />
-              </button>
-            </template>
-            {{ t('common.copy') }}
-          </n-tooltip>
+          <div class="turn-action-group">
+            <n-tooltip v-if="canCopyTurn" trigger="hover" :delay="300">
+              <template #trigger>
+                <button type="button" class="turn-action-button turn-copy-button" :aria-label="t('common.copy')" @click.stop="copyTurnText">
+                  <CrmIcon type="iconicon_file_copy" :size="15" />
+                </button>
+              </template>
+              {{ t('common.copy') }}
+            </n-tooltip>
+          </div>
           <time class="turn__time">{{ turn.time }}</time>
         </div>
       </div>
@@ -53,22 +55,24 @@
         <ProcessTimeline v-if="displayProcess" :process="displayProcess" @toggle="toggleProcessPanel" />
         <AssistantMarkdownPreview v-if="turn.text" :turn-id="turn.id" :source="turn.text" />
         <div class="turn-actions turn-actions--assistant">
-          <n-tooltip v-if="canRetryTurn" trigger="hover" :delay="300">
-            <template #trigger>
-              <button type="button" class="turn-action-button turn-retry-button" :aria-label="t('common.retry')" @click.stop="$emit('retry', turn.id)">
-                <CrmIcon type="iconicon_refresh" :size="15" />
-              </button>
-            </template>
-            {{ t('common.retry') }}
-          </n-tooltip>
-          <n-tooltip v-if="canCopyTurn" trigger="hover" :delay="300">
-            <template #trigger>
-              <button type="button" class="turn-action-button turn-copy-button" :aria-label="t('common.copy')" @click.stop="copyTurnText">
-                <CrmIcon type="iconicon_file_copy" :size="15" />
-              </button>
-            </template>
-            {{ t('common.copy') }}
-          </n-tooltip>
+          <div class="turn-action-group">
+            <n-tooltip v-if="canRetryTurn" trigger="hover" :delay="300">
+              <template #trigger>
+                <button type="button" class="turn-action-button turn-retry-button" :aria-label="t('common.retry')" @click.stop="$emit('retry', turn.id)">
+                  <CrmIcon type="iconicon_refresh" :size="15" />
+                </button>
+              </template>
+              {{ t('common.retry') }}
+            </n-tooltip>
+            <n-tooltip v-if="canCopyTurn" trigger="hover" :delay="300">
+              <template #trigger>
+                <button type="button" class="turn-action-button turn-copy-button" :aria-label="t('common.copy')" @click.stop="copyTurnText">
+                  <CrmIcon type="iconicon_file_copy" :size="15" />
+                </button>
+              </template>
+              {{ t('common.copy') }}
+            </n-tooltip>
+          </div>
           <time class="turn__time turn__time--assistant">{{ turn.time }}</time>
         </div>
       </div>
@@ -193,14 +197,14 @@
   }
 
   .turn__content {
-    width: min(840px, 100%);
+    width: min(1180px, 100%);
   }
 
   .turn--user .turn__content {
     display: flex;
     justify-content: flex-end;
     width: auto;
-    max-width: min(840px, 100%);
+    max-width: min(1180px, 100%);
   }
 
   .user-bubble {
@@ -226,12 +230,13 @@
 
   .assistant-block {
     position: relative;
-    max-width: 760px;
+    max-width: 1180px;
     padding-top: 2px;
   }
 
   .turn-actions {
     display: flex;
+    position: relative;
     align-items: center;
     gap: 10px;
     min-height: 22px;
@@ -249,6 +254,26 @@
     justify-content: flex-start;
   }
 
+  .turn-action-group {
+    position: absolute;
+    z-index: 1;
+    top: 2px;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.16s ease;
+  }
+
+  .turn-actions--user .turn-action-group {
+    right: 0;
+  }
+
+  .turn-actions--assistant .turn-action-group {
+    left: 0;
+  }
+
   .turn-action-button {
     display: inline-flex;
     align-items: center;
@@ -260,8 +285,8 @@
     background: transparent;
     color: var(--text-n4);
     cursor: pointer;
-    opacity: 0;
-    pointer-events: none;
+    user-select: none;
+    -webkit-user-select: none;
     transition: opacity 0.16s ease, color 0.16s ease, background-color 0.16s ease;
     &:hover {
       background: rgb(39 184 209 / 9%);
@@ -275,6 +300,13 @@
     }
   }
 
+  :deep(.turn-action-button *) {
+    pointer-events: none;
+    cursor: inherit;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+
   .turn-copy-button {
     flex: none;
   }
@@ -285,8 +317,19 @@
 
   .turn-shell:hover .turn-action-button,
   .assistant-block:hover .turn-action-button {
+    pointer-events: auto;
+  }
+
+  .turn-shell:hover .turn-action-group,
+  .assistant-block:hover .turn-action-group {
     opacity: 1;
     pointer-events: auto;
+  }
+
+  .turn-shell:hover .turn__time,
+  .assistant-block:hover .turn__time {
+    opacity: 0;
+    pointer-events: none;
   }
 
   .reference-list {
@@ -387,6 +430,7 @@
     font-size: 12px;
     color: var(--text-n4);
     line-height: 18px;
+    transition: opacity 0.16s ease;
   }
 
   .turn__time--assistant {

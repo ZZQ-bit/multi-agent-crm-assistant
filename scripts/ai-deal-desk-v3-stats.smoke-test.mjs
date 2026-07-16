@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { resolve } from 'node:path';
 
-const yamlPath = resolve('AI Deal Desk - V3 Stable Enhanced.yml');
+const yamlPath = resolve('chatflows/ai-deal-desk-v3.example.yml');
 
 const pythonScript = `
 from pathlib import Path
@@ -36,14 +36,14 @@ const edgeIds = parsed.edge_ids ?? [];
 
 assert.match(
   taskPlanNormalize,
-  /task_type == 'stats_analysis'/,
-  'task plan normalizer should recognize stats_analysis as a dedicated CRM business task'
+  /'stats_analysis'/,
+  'task plan normalizer should keep stats_analysis in the supported CRM business tasks'
 );
 
 assert.match(
   taskPlanNormalize,
-  /required_agents\['analytics'\] = True/,
-  'stats_analysis should request the analytics Agent'
+  /required_agents\.get\('analytics'\)/,
+  'task plan normalizer should route Planner-selected analytics work to the analytics Agent'
 );
 
 assert.match(

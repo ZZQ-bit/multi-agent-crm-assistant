@@ -5,7 +5,8 @@
         :sessions="sessions"
         :active-session-id="activeSessionId"
         :collapsed="historyCollapsed"
-        @selectSession="activeSessionId = $event"
+        @selectSession="selectSession"
+        @deleteSession="deleteSession"
         @newSession="createNewSession"
         @toggleCollapse="historyCollapsed = !historyCollapsed"
       />
@@ -133,6 +134,8 @@
     isStopping,
     starters,
     mentionOptions,
+    selectSession,
+    deleteSession,
     createNewSession,
     toggleProcess,
     removeReference,

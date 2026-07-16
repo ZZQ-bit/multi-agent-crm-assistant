@@ -1,0 +1,67 @@
+openapi: 3.0.3
+info:
+  title: AI Deal Desk CRM Resolver
+  version: 1.0.0
+  description: 供 AI Deal Desk 规划器确认真实 CRM 客户或商机对象。
+servers:
+  - url: https://your-domain.example.com/anonymous/ai/deal-desk/dify-tools
+security:
+  - DifyToolToken: []
+paths:
+  /resolve-crm-object:
+    post:
+      operationId: resolve_crm_object
+      summary: CRM 对象解析
+      description: 同时搜索客户和商机；返回唯一精确对象、唯一模糊对象或真实候选列表。只确认对象，不读取完整业务上下文。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - objectReference
+              properties:
+                objectReference:
+                  type: string
+                  description: 从用户语义中提取的客户名或商机名，不要传入整句任务要求。
+                limit:
+                  type: integer
+                  minimum: 1
+                  maximum: 20
+                  default: 10
+                  description: 每类对象最多搜索数量。
+      responses:
+        '200':
+          description: CRM 对象解析统一响应。
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ToolEnvelope'
+components:
+  securitySchemes:
+    DifyToolToken:
+      type: apiKey
+      in: header
+      name: X-DIFY-TOOL-TOKEN
+  schemas:
+    ToolEnvelope:
+      type: object
+      required:
+        - success
+        - code
+        - data
+      properties:
+        success:
+          type: boolean
+        code:
+          type: string
+        message:
+          type: string
+        data:
+          type: object
+          additionalProperties: true
+        warnings:
+          type: array
+          items:
+            type: string

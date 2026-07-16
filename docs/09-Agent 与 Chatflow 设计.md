@@ -4,7 +4,7 @@
 
 本文档是 多Agent智能助手 阶段 4 的主设计文档，用于固定 Planner 路由、多 Agent 分工、Dify Chatflow 编排、CRM Tool API 只读调用链路、多结果文本澄清、会话记忆和最终输出协议边界。
 
-阶段 4 的目标不是重新设计 CordysCRM，也不是重开阶段 3 的 Tool API 合同，而是让公开版 `chatflows/ai-deal-desk-v3.example.yml` 成为只读型 CRM 多智能体工作台的可导入示例：
+阶段 4 的目标不是重新设计 CordysCRM，也不是重开阶段 3 的 Tool API 合同，而是让当前 `chatflows/ai-deal-desk-v3.example.yml` 成为只读型 CRM 多智能体工作台：
 
 ```text
 用户自由提问
@@ -29,7 +29,7 @@
 
 ## 2.1 V3 Stable Enhanced 当前主流程
 
-当前 Chatflow 以公开版 `chatflows/ai-deal-desk-v3.example.yml` 为准。它已经从旧版 `route_gate -> 各任务分支 -> 各自 answer` 的结构，改为“统一 Planner、统一证据台账、统一业务回答、统一协议适配”的链路。
+当前 Chatflow 以 `chatflows/ai-deal-desk-v3.example.yml` 为准。它已经从旧版 `route_gate -> 各任务分支 -> 各自 answer` 的结构，改为“统一 Planner、统一证据台账、统一业务回答、统一协议适配”的链路。
 
 稳定主干是：
 

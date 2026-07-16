@@ -1,6 +1,17 @@
 import type { DealDeskProcessBlock, DealDeskProcessEvent, DealDeskTurnType } from '../types';
 
 const VALID_PROCESS_EVENT_TYPES = new Set<DealDeskProcessEvent['type']>([
+  'task_understanding',
+  'attachment_analysis',
+  'crm_retrieval',
+  'knowledge_retrieval',
+  'external_research',
+  'sales_analysis',
+  'finance_analysis',
+  'delivery_analysis',
+  'legal_analysis',
+  'analytics_analysis',
+  'answer_generation',
   'task_identified',
   'object_required',
   'object_selected',
@@ -21,6 +32,17 @@ const processStatusPriority: Record<DealDeskProcessEvent['status'], number> = {
   failed: 4,
 };
 const processEventOrder: Partial<Record<NonNullable<DealDeskProcessEvent['type']>, number>> = {
+  task_understanding: 10,
+  attachment_analysis: 20,
+  crm_retrieval: 30,
+  knowledge_retrieval: 40,
+  external_research: 50,
+  sales_analysis: 60,
+  finance_analysis: 61,
+  delivery_analysis: 62,
+  legal_analysis: 63,
+  analytics_analysis: 64,
+  answer_generation: 80,
   task_identified: 10,
   object_required: 20,
   object_selected: 30,
@@ -35,6 +57,17 @@ const processEventOrder: Partial<Record<NonNullable<DealDeskProcessEvent['type']
 };
 
 const processSummaryLabels: Record<NonNullable<DealDeskProcessEvent['type']>, string> = {
+  task_understanding: '理解任务',
+  attachment_analysis: '附件解析',
+  crm_retrieval: 'CRM 资料',
+  knowledge_retrieval: '业务规则',
+  external_research: '公开资料',
+  sales_analysis: '销售分析',
+  finance_analysis: '财务分析',
+  delivery_analysis: '交付分析',
+  legal_analysis: '合同分析',
+  analytics_analysis: '经营分析',
+  answer_generation: '回答生成',
   task_identified: '任务识别',
   object_required: '对象确认',
   object_selected: '对象确认',
@@ -49,6 +82,17 @@ const processSummaryLabels: Record<NonNullable<DealDeskProcessEvent['type']>, st
 };
 
 const completedTextByType: Record<NonNullable<DealDeskProcessEvent['type']>, string> = {
+  task_understanding: '已理解本轮任务',
+  attachment_analysis: '已解析附件内容',
+  crm_retrieval: '已读取 CRM 资料',
+  knowledge_retrieval: '已检索业务规则',
+  external_research: '已查询公开资料',
+  sales_analysis: '已完成销售分析',
+  finance_analysis: '已完成财务分析',
+  delivery_analysis: '已完成交付分析',
+  legal_analysis: '已完成合同分析',
+  analytics_analysis: '已完成经营分析',
+  answer_generation: '已生成回答',
   task_identified: '已识别本轮任务',
   object_required: '需要先确认本轮分析对象',
   object_selected: '已确定本轮分析对象',
@@ -63,6 +107,17 @@ const completedTextByType: Record<NonNullable<DealDeskProcessEvent['type']>, str
 };
 
 const runningTextByType: Partial<Record<NonNullable<DealDeskProcessEvent['type']>, string>> = {
+  task_understanding: '正在理解本轮任务',
+  attachment_analysis: '正在解析附件内容',
+  crm_retrieval: '正在读取 CRM 资料',
+  knowledge_retrieval: '正在检索业务规则',
+  external_research: '正在查询公开资料',
+  sales_analysis: '正在进行销售分析',
+  finance_analysis: '正在进行财务分析',
+  delivery_analysis: '正在进行交付分析',
+  legal_analysis: '正在进行合同分析',
+  analytics_analysis: '正在进行经营分析',
+  answer_generation: '正在整理回答',
   task_identified: '正在识别本轮任务',
   object_required: '需要先确认本轮分析对象',
   object_selected: '正在确认本轮分析对象',
@@ -82,14 +137,18 @@ function shouldPreferNewEvent(existing: DealDeskProcessEvent, incoming: DealDesk
     return incomingPriority > existingPriority;
   }
 
-  if (existing.type === 'task_identified' && existing.status !== 'running') {
-    return false;
-  }
-
   return incoming.text.length >= existing.text.length;
 }
 
 function buildDisplayEventText(event: DealDeskProcessEvent) {
+  if (event.status === 'failed') {
+    return event.text || completedTextByType[event.type!];
+  }
+
+  if (event.type === 'answer_generation' && event.id === 'business_answer_agent') {
+    return event.status === 'running' ? '正在汇总结论' : '已生成结论';
+  }
+
   if (event.status === 'running') {
     return runningTextByType[event.type!] || completedTextByType[event.type!];
   }
@@ -121,7 +180,7 @@ function compressProcessEvents(events: DealDeskProcessEvent[]) {
     (event) => event.type && VALID_PROCESS_EVENT_TYPES.has(event.type) && !HIDDEN_PROCESS_EVENT_TYPES.has(event.type)
   );
   const compressed = visibleEvents.reduce<DealDeskProcessEvent[]>((result, event) => {
-    const index = event.type ? result.findIndex((item) => item.type === event.type) : -1;
+    const index = result.findIndex((item) => item.id === event.id);
     if (index >= 0) {
       if (shouldPreferNewEvent(result[index], event)) {
         result[index] = event;
@@ -139,16 +198,34 @@ function compressProcessEvents(events: DealDeskProcessEvent[]) {
 }
 
 function buildProcessSummary(events: DealDeskProcessEvent[]) {
-  const labels = events
-    .map((event) => (event.type ? processSummaryLabels[event.type] : null))
-    .filter((label): label is string => Boolean(label));
-  const uniqueLabels = Array.from(new Set(labels));
+  const runningEvents = events.filter((event) => event.status === 'running');
+  const completedCount = events.filter((event) => event.status === 'completed').length;
+  const abnormalCount = events.filter(
+    (event) => event.status === 'warning' || event.status === 'failed' || event.type === 'failed'
+  ).length;
 
-  if (!uniqueLabels.length) {
-    return `已完成 ${events.length} 项处理`;
+  if (runningEvents.length) {
+    if (completedCount > 0 || abnormalCount > 0) {
+      return `已完成 ${completedCount} 项，正在处理 ${runningEvents.length} 项`;
+    }
+
+    const labels = runningEvents
+      .map((event) => (event.type ? processSummaryLabels[event.type] : null))
+      .filter((label): label is string => Boolean(label));
+    if (runningEvents.length === 1) {
+      return `正在处理：${labels[0] || '当前任务'}`;
+    }
+
+    const visibleLabels = labels.slice(0, 3);
+    const labelText = visibleLabels.length ? `：${visibleLabels.join('、')}${labels.length > 3 ? '等' : ''}` : '';
+    return `正在并行处理 ${runningEvents.length} 项${labelText}`;
   }
 
-  return `已完成 ${events.length} 项检查：${uniqueLabels.join('、')}`;
+  if (abnormalCount > 0) {
+    return `已完成 ${completedCount} 项，${abnormalCount} 项异常`;
+  }
+
+  return `已完成 ${completedCount} 项处理`;
 }
 
 export function buildProcessBlock(events?: DealDeskProcessEvent[] | null) {

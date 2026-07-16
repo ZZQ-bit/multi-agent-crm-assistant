@@ -1,0 +1,860 @@
+{
+  "version": "3.0",
+  "description": "多Agent智能助手 V3 测试用例集，覆盖 CRM 查询、商机进展总结、沟通内容生成、跟进计划生成、复杂商机评审 5 大场景",
+  "created_at": "2026-06-30",
+  "test_cases": [
+    {
+      "id": "crm-query-001",
+      "category": "CRM 查询",
+      "subcategory": "客户名模糊查询",
+      "input": {
+        "query": "华为的客户信息",
+        "boundObject": null
+      },
+      "expected_behavior": [
+        "调用 search_customers 工具",
+        "返回候选客户列表（如有多个）",
+        "不声称已读取完整 CRM 详情",
+        "结构化展示客户名称、负责人、部门"
+      ],
+      "expected_time_seconds": 15
+    },
+    {
+      "id": "crm-query-002",
+      "category": "CRM 查询",
+      "subcategory": "商机名模糊查询",
+      "input": {
+        "query": "CRM采购项目的商机情况",
+        "boundObject": null
+      },
+      "expected_behavior": [
+        "调用 search_opportunities 工具",
+        "返回候选商机列表",
+        "展示商机名称、金额、阶段、负责人",
+        "多候选时请求用户选择"
+      ],
+      "expected_time_seconds": 15
+    },
+    {
+      "id": "crm-query-003",
+      "category": "CRM 查询",
+      "subcategory": "多候选对象澄清",
+      "input": {
+        "query": "腾讯的商机进展",
+        "boundObject": null
+      },
+      "expected_behavior": [
+        "返回 OBJECT_AMBIGUOUS 状态",
+        "展示多个候选商机供用户选择",
+        "不猜测具体是哪个商机",
+        "提示用户输入完整名称或选择编号"
+      ],
+      "expected_time_seconds": 12
+    },
+    {
+      "id": "crm-query-004",
+      "category": "CRM 查询",
+      "subcategory": "无匹配结果",
+      "input": {
+        "query": "不存在的公司XYZ的商机信息",
+        "boundObject": null
+      },
+      "expected_behavior": [
+        "返回 OBJECT_NOT_FOUND 或明确说明未找到",
+        "不编造 CRM 数据",
+        "提示用户确认名称或提供更多条件",
+        "不展示空卡片或假数据"
+      ],
+      "expected_time_seconds": 10
+    },
+    {
+      "id": "crm-query-005",
+      "category": "CRM 查询",
+      "subcategory": "带金额筛选",
+      "input": {
+        "query": "金额大于100万的商机有哪些",
+        "boundObject": null
+      },
+      "expected_behavior": [
+        "调用 search_opportunities 工具",
+        "返回符合金额条件的商机列表",
+        "展示金额、阶段、负责人",
+        "列表不超过 10 条"
+      ],
+      "expected_time_seconds": 18
+    },
+    {
+      "id": "crm-query-006",
+      "category": "CRM 查询",
+      "subcategory": "带阶段筛选",
+      "input": {
+        "query": "处于商务采购阶段的商机",
+        "boundObject": null
+      },
+      "expected_behavior": [
+        "调用 search_opportunities 工具",
+        "返回指定阶段的商机列表",
+        "展示商机名称、金额、负责人",
+        "按金额或优先级排序"
+      ],
+      "expected_time_seconds": 18
+    },
+    {
+      "id": "crm-query-007",
+      "category": "CRM 查询",
+      "subcategory": "绑定客户后查询",
+      "input": {
+        "query": "这个客户的近期跟进记录",
+        "boundObject": {
+          "objectType": "customer",
+          "objectId": "test-customer-001",
+          "objectName": "测试客户A",
+          "source": "mention"
+        }
+      },
+      "expected_behavior": [
+        "调用 get_customer_context 工具",
+        "返回该客户的跟进记录列表",
+        "展示沟通时间、方式、内容摘要",
+        "区分已完成和未完成计划"
+      ],
+      "expected_time_seconds": 20
+    },
+    {
+      "id": "crm-query-008",
+      "category": "CRM 查询",
+      "subcategory": "绑定商机后查询",
+      "input": {
+        "query": "这个商机的详细信息",
+        "boundObject": {
+          "objectType": "opportunity",
+          "objectId": "test-opt-001",
+          "objectName": "CRM采购商机A",
+          "source": "mention"
+        }
+      },
+      "expected_behavior": [
+        "调用 get_opportunity_context 工具",
+        "返回商机详情、金额、阶段、客户",
+        "展示关联联系人",
+        "不暴露内部字段 ID"
+      ],
+      "expected_time_seconds": 20
+    },
+    {
+      "id": "opportunity-summary-001",
+      "category": "商机进展总结",
+      "subcategory": "指定商机摘要",
+      "input": {
+        "query": "帮我总结CRM采购商机A的进展情况",
+        "boundObject": {
+          "objectType": "opportunity",
+          "objectId": "test-opt-001",
+          "objectName": "CRM采购商机A",
+          "source": "mention"
+        }
+      },
+      "expected_behavior": [
+        "调用 get_opportunity_context 工具",
+        "输出结构化摘要：阶段、金额、关键进展",
+        "展示最近跟进记录",
+        "不生成写回草稿",
+        "字数控制在 700-1000 字"
+      ],
+      "expected_time_seconds": 25
+    },
+    {
+      "id": "opportunity-summary-002",
+      "category": "商机进展总结",
+      "subcategory": "最近跟进记录",
+      "input": {
+        "query": "最近一周的跟进情况怎么样",
+        "boundObject": {
+          "objectType": "opportunity",
+          "objectId": "test-opt-001",
+          "objectName": "CRM采购商机A",
+          "source": "mention"
+        }
+      },
+      "expected_behavior": [
+        "调用 get_opportunity_context 工具",
+        "返回最近一周跟进记录",
+        "按时间排序展示",
+        "展示沟通方式、对象、内容摘要",
+        "区分有效推进和待处理事项"
+      ],
+      "expected_time_seconds": 22
+    },
+    {
+      "id": "opportunity-summary-003",
+      "category": "商机进展总结",
+      "subcategory": "未完成计划",
+      "input": {
+        "query": "还有哪些跟进计划没完成",
+        "boundObject": {
+          "objectType": "opportunity",
+          "objectId": "test-opt-001",
+          "objectName": "CRM采购商机A",
+          "source": "mention"
+        }
+      },
+      "expected_behavior": [
+        "调用 get_opportunity_context 工具",
+        "返回 openFollowPlans 数组",
+        "展示计划时间、方式、目标",
+        "标识超期计划",
+        "给出优先级建议"
+      ],
+      "expected_time_seconds": 20
+    },
+    {
+      "id": "opportunity-summary-004",
+      "category": "商机进展总结",
+      "subcategory": "风险信号识别",
+      "input": {
+        "query": "这个商机有什么风险吗",
+        "boundObject": {
+          "objectType": "opportunity",
+          "objectId": "test-opt-002",
+          "objectName": "高风险测试商机B",
+          "source": "mention"
+        }
+      },
+      "expected_behavior": [
+        "调用销售评估 Agent",
+        "识别阶段停滞、长期未跟进等风险",
+        "展示风险等级 (low/medium/high)",
+        "给出具体风险依据",
+        "不声称已查询知识库（除非确实召回）"
+      ],
+      "expected_time_seconds": 30
+    },
+    {
+      "id": "opportunity-summary-005",
+      "category": "商机进展总结",
+      "subcategory": "决策人变更",
+      "input": {
+        "query": "决策人最近有变化吗",
+        "boundObject": {
+          "objectType": "opportunity",
+          "objectId": "test-opt-001",
+          "objectName": "CRM采购商机A",
+          "source": "mention"
+        }
+      },
+      "expected_behavior": [
+        "调用 get_opportunity_context 工具",
+        "检查联系人变更记录",
+        "如有变更，展示新旧决策人对比",
+        "如无变更，明确说明",
+        "给出应对建议"
+      ],
+      "expected_time_seconds": 25
+    },
+    {
+      "id": "opportunity-summary-006",
+      "category": "商机进展总结",
+      "subcategory": "长期未跟进",
+      "input": {
+        "query": "这个商机很久没跟进了吧",
+        "boundObject": {
+          "objectType": "opportunity",
+          "objectId": "test-opt-003",
+          "objectName": "长期未跟进商机C",
+          "source": "mention"
+        }
+      },
+      "expected_behavior": [
+        "调用 get_opportunity_context 工具",
+        "计算最后跟进时间距今天数",
+        "识别为高风险信号",
+        "给出紧急跟进建议",
+        "字数控制在 500-800 字"
+      ],
+      "expected_time_seconds": 25
+    },
+    {
+      "id": "communication-gen-001",
+      "category": "沟通内容生成",
+      "subcategory": "邮件模板",
+      "input": {
+        "query": "帮我写一封给客户的邮件，说明我们的报价优势",
+        "boundObject": {
+          "objectType": "opportunity",
+          "objectId": "test-opt-001",
+          "objectName": "CRM采购商机A",
+          "source": "mention"
+        }
+      },
+      "expected_behavior": [
+        "不声称已写入 CRM",
+        "生成结构化邮件模板",
+        "包含：称呼、主体内容、结尾、签名",
+        "引用商机金额、阶段等事实",
+        "不编造未确认的承诺"
+      ],
+      "expected_time_seconds": 20
+    },
+    {
+      "id": "communication-gen-002",
+      "category": "沟通内容生成",
+      "subcategory": "异议处理话术",
+      "input": {
+        "query": "客户觉得价格太贵，怎么回应",
+        "boundObject": {
+          "objectType": "opportunity",
+          "objectId": "test-opt-001",
+          "objectName": "CRM采购商机A",
+          "source": "mention"
+        }
+      },
+      "expected_behavior": [
+        "调用知识库规则（如有折扣规则）",
+        "生成异议处理话术",
+        "突出价值而非单纯降价",
+        "不承诺具体折扣比例",
+        "给出 2-3 种应对策略"
+      ],
+      "expected_time_seconds": 25
+    },
+    {
+      "id": "communication-gen-003",
+      "category": "沟通内容生成",
+      "subcategory": "报价说明",
+      "input": {
+        "query": "帮我解释报价构成",
+        "boundObject": {
+          "objectType": "opportunity",
+          "objectId": "test-opt-001",
+          "objectName": "CRM采购商机A",
+          "source": "mention"
+        }
+      },
+      "expected_behavior": [
+        "调用 get_opportunity_context 工具",
+        "获取商机金额信息",
+        "生成报价说明模板",
+        "区分产品、服务、支持等构成",
+        "不承诺具体优惠"
+      ],
+      "expected_time_seconds": 22
+    },
+    {
+      "id": "communication-gen-004",
+      "category": "沟通内容生成",
+      "subcategory": "交付承诺沟通",
+      "input": {
+        "query": "怎么跟客户沟通交付时间",
+        "boundObject": {
+          "objectType": "opportunity",
+          "objectId": "test-opt-001",
+          "objectName": "CRM采购商机A",
+          "source": "mention"
+        }
+      },
+      "expected_behavior": [
+        "调用交付可行性 Agent（如触发）",
+        "生成交付沟通模板",
+        "不承诺具体上线日期",
+        "说明标准交付周期范围",
+        "预留缓冲时间表述"
+      ],
+      "expected_time_seconds": 30
+    },
+    {
+      "id": "communication-gen-005",
+      "category": "沟通内容生成",
+      "subcategory": "合同条款沟通",
+      "input": {
+        "query": "客户要求修改验收条款，怎么回复",
+        "boundObject": {
+          "objectType": "opportunity",
+          "objectId": "test-opt-001",
+          "objectName": "CRM采购商机A",
+          "source": "mention"
+        }
+      },
+      "expected_behavior": [
+        "调用合同风险 Agent（如触发）",
+        "生成条款沟通模板",
+        "不给出法律意见",
+        "说明标准验收条款内容",
+        "建议内部确认后再回复"
+      ],
+      "expected_time_seconds": 30
+    },
+    {
+      "id": "communication-gen-006",
+      "category": "沟通内容生成",
+      "subcategory": "写回草稿生成",
+      "input": {
+        "query": "生成一条跟进记录并帮我保存",
+        "boundObject": {
+          "objectType": "opportunity",
+          "objectId": "test-opt-001",
+          "objectName": "CRM采购商机A",
+          "source": "mention"
+        }
+      },
+      "expected_behavior": [
+        "识别写回意图",
+        "生成跟进记录草稿",
+        "展示预览并请求用户确认",
+        "等待用户明确确认后才写回",
+        "确认后返回记录 ID"
+      ],
+      "expected_time_seconds": 35,
+      "requires_two_rounds": true,
+      "round_2_input": {
+        "query": "确认保存"
+      }
+    },
+    {
+      "id": "followup-plan-001",
+      "category": "跟进计划生成",
+      "subcategory": "标准跟进计划",
+      "input": {
+        "query": "帮我制定下个月的跟进计划",
+        "boundObject": {
+          "objectType": "opportunity",
+          "objectId": "test-opt-001",
+          "objectName": "CRM采购商机A",
+          "source": "mention"
+        }
+      },
+      "expected_behavior": [
+        "调用 get_opportunity_context 工具",
+        "生成 2-4 个具体跟进动作",
+        "每个动作包含：时间、方式、目标",
+        "不默认生成写回草稿",
+        "给出优先级排序"
+      ],
+      "expected_time_seconds": 25
+    },
+    {
+      "id": "followup-plan-002",
+      "category": "跟进计划生成",
+      "subcategory": "紧急推进",
+      "input": {
+        "query": "这个商机要紧急推进，帮我安排跟进计划",
+        "boundObject": {
+          "objectType": "opportunity",
+          "objectId": "test-opt-003",
+          "objectName": "长期未跟进商机C",
+          "source": "mention"
+        }
+      },
+      "expected_behavior": [
+        "识别为高优先级",
+        "生成本周内的密集跟进计划",
+        "包含关键决策人沟通",
+        "给出风险缓解动作",
+        "字数控制在 600-900 字"
+      ],
+      "expected_time_seconds": 28
+    },
+    {
+      "id": "followup-plan-003",
+      "category": "跟进计划生成",
+      "subcategory": "资源协调",
+      "input": {
+        "query": "需要协调技术团队支持，怎么安排",
+        "boundObject": {
+          "objectType": "opportunity",
+          "objectId": "test-opt-001",
+          "objectName": "CRM采购商机A",
+          "source": "mention"
+        }
+      },
+      "expected_behavior": [
+        "调用交付可行性 Agent（如触发）",
+        "生成资源协调计划",
+        "包含技术演示、方案确认等动作",
+        "不承诺具体资源分配",
+        "建议内部先确认资源可用性"
+      ],
+      "expected_time_seconds": 30
+    },
+    {
+      "id": "followup-plan-004",
+      "category": "跟进计划生成",
+      "subcategory": "风险缓解",
+      "input": {
+        "query": "这个商机有风险，帮我制定应对计划",
+        "boundObject": {
+          "objectType": "opportunity",
+          "objectId": "test-opt-002",
+          "objectName": "高风险测试商机B",
+          "source": "mention"
+        }
+      },
+      "expected_behavior": [
+        "调用销售评估 Agent",
+        "识别具体风险类型",
+        "生成针对性缓解动作",
+        "包含客户沟通、内部协调等",
+        "给出时间节点"
+      ],
+      "expected_time_seconds": 32
+    },
+    {
+      "id": "followup-plan-005",
+      "category": "跟进计划生成",
+      "subcategory": "合同谈判",
+      "input": {
+        "query": "进入合同谈判阶段了，接下来怎么跟进",
+        "boundObject": {
+          "objectType": "opportunity",
+          "objectId": "test-opt-004",
+          "objectName": "合同谈判商机D",
+          "source": "mention"
+        }
+      },
+      "expected_behavior": [
+        "调用合同风险 Agent",
+        "生成合同谈判跟进计划",
+        "包含条款确认、法务支持等动作",
+        "不给出合同可签结论",
+        "建议关键条款内部确认"
+      ],
+      "expected_time_seconds": 35
+    },
+    {
+      "id": "followup-plan-006",
+      "category": "跟进计划生成",
+      "subcategory": "写回确认/取消",
+      "input": {
+        "query": "帮我创建一个跟进计划并保存",
+        "boundObject": {
+          "objectType": "opportunity",
+          "objectId": "test-opt-001",
+          "objectName": "CRM采购商机A",
+          "source": "mention"
+        }
+      },
+      "expected_behavior": [
+        "识别写回意图",
+        "生成跟进计划草稿",
+        "展示预览并请求用户确认",
+        "用户确认后调用 create_follow_plan",
+        "返回计划 ID 或失败原因"
+      ],
+      "expected_time_seconds": 35,
+      "requires_two_rounds": true,
+      "round_2_input": {
+        "query": "确认创建"
+      }
+    },
+    {
+      "id": "complex-review-001",
+      "category": "复杂商机评审",
+      "subcategory": "综合评审",
+      "input": {
+        "query": "帮我评审CRM采购商机A，从销售、财务、交付、合同四个角度分析",
+        "boundObject": {
+          "objectType": "opportunity",
+          "objectId": "test-opt-001",
+          "objectName": "CRM采购商机A",
+          "source": "mention"
+        }
+      },
+      "expected_behavior": [
+        "触发多 Agent 评审流程",
+        "依次调用销售评估、财务风控、交付可行性、合同风险 Agent",
+        "协调总结 Agent 汇总结论",
+        "输出结构化评审报告",
+        "包含风险等级、建议动作",
+        "字数控制在 800-1200 字"
+      ],
+      "expected_time_seconds": 60
+    },
+    {
+      "id": "complex-review-002",
+      "category": "复杂商机评审",
+      "subcategory": "财务专项",
+      "input": {
+        "query": "分析这个商机的财务风险",
+        "boundObject": {
+          "objectType": "opportunity",
+          "objectId": "test-opt-001",
+          "objectName": "CRM采购商机A",
+          "source": "mention"
+        }
+      },
+      "expected_behavior": [
+        "调用财务风控 Agent",
+        "分析金额、折扣、付款方式",
+        "识别回款和现金流风险",
+        "不输出财务已通过结论",
+        "给出财务风险缓解建议"
+      ],
+      "expected_time_seconds": 40
+    },
+    {
+      "id": "complex-review-003",
+      "category": "复杂商机评审",
+      "subcategory": "交付专项",
+      "input": {
+        "query": "评估交付可行性",
+        "boundObject": {
+          "objectType": "opportunity",
+          "objectId": "test-opt-001",
+          "objectName": "CRM采购商机A",
+          "source": "mention"
+        }
+      },
+      "expected_behavior": [
+        "调用交付可行性 Agent",
+        "分析上线周期、定制范围",
+        "识别资源和履约风险",
+        "不承诺具体上线日期",
+        "给出交付风险缓解建议"
+      ],
+      "expected_time_seconds": 40
+    },
+    {
+      "id": "complex-review-004",
+      "category": "复杂商机评审",
+      "subcategory": "合同专项",
+      "input": {
+        "query": "检查合同风险",
+        "boundObject": {
+          "objectType": "opportunity",
+          "objectId": "test-opt-004",
+          "objectName": "合同谈判商机D",
+          "source": "mention"
+        }
+      },
+      "expected_behavior": [
+        "调用合同风险 Agent",
+        "分析合同条款、验收、赔付",
+        "识别责任边界和合规风险",
+        "不给最终法律意见",
+        "建议关键条款法务审核"
+      ],
+      "expected_time_seconds": 40
+    },
+    {
+      "id": "complex-review-005",
+      "category": "复杂商机评审",
+      "subcategory": "销售风险",
+      "input": {
+        "query": "评估这个商机的赢单机会和推进风险",
+        "boundObject": {
+          "objectType": "opportunity",
+          "objectId": "test-opt-002",
+          "objectName": "高风险测试商机B",
+          "source": "mention"
+        }
+      },
+      "expected_behavior": [
+        "调用销售评估 Agent",
+        "分析客户意向、商机阶段",
+        "识别推进动作和赢单机会",
+        "给出销售风险等级",
+        "给出具体推进建议"
+      ],
+      "expected_time_seconds": 35
+    },
+    {
+      "id": "complex-review-006",
+      "category": "复杂商机评审",
+      "subcategory": "缺失信息处理",
+      "input": {
+        "query": "评审这个商机",
+        "boundObject": {
+          "objectType": "opportunity",
+          "objectId": "test-opt-005",
+          "objectName": "信息缺失商机E",
+          "source": "mention"
+        }
+      },
+      "expected_behavior": [
+        "调用 get_opportunity_context 工具",
+        "识别 missingFields",
+        "说明缺失的关键信息",
+        "给出追问或补充建议",
+        "仍输出可用的分析结论"
+      ],
+      "expected_time_seconds": 30
+    },
+    {
+      "id": "complex-review-007",
+      "category": "复杂商机评审",
+      "subcategory": "多风险交叉",
+      "input": {
+        "query": "这个商机有哪些风险，帮我全面分析",
+        "boundObject": {
+          "objectType": "opportunity",
+          "objectId": "test-opt-002",
+          "objectName": "高风险测试商机B",
+          "source": "mention"
+        }
+      },
+      "expected_behavior": [
+        "触发多 Agent 评审流程",
+        "汇总销售、财务、交付、合同风险",
+        "交叉分析风险关联",
+        "输出综合风险等级",
+        "给出优先缓解建议"
+      ],
+      "expected_time_seconds": 55
+    },
+    {
+      "id": "complex-review-008",
+      "category": "复杂商机评审",
+      "subcategory": "折扣+付款组合",
+      "input": {
+        "query": "客户要求15%折扣和分期付款，帮我分析风险",
+        "boundObject": {
+          "objectType": "opportunity",
+          "objectId": "test-opt-001",
+          "objectName": "CRM采购商机A",
+          "source": "mention"
+        }
+      },
+      "expected_behavior": [
+        "调用财务风控 Agent",
+        "调用知识库折扣规则",
+        "分析折扣+付款组合风险",
+        "不承诺批准或拒绝",
+        "给出风险评估和建议"
+      ],
+      "expected_time_seconds": 45
+    },
+    {
+      "id": "complex-review-009",
+      "category": "复杂商机评审",
+      "subcategory": "定制+周期组合",
+      "input": {
+        "query": "客户要求大量定制并压缩交付周期",
+        "boundObject": {
+          "objectType": "opportunity",
+          "objectId": "test-opt-001",
+          "objectName": "CRM采购商机A",
+          "source": "mention"
+        }
+      },
+      "expected_behavior": [
+        "调用交付可行性 Agent",
+        "调用知识库定制规则",
+        "分析定制范围和周期压缩风险",
+        "不承诺可交付结论",
+        "给出资源评估建议"
+      ],
+      "expected_time_seconds": 45
+    },
+    {
+      "id": "complex-review-010",
+      "category": "复杂商机评审",
+      "subcategory": "验收+赔付组合",
+      "input": {
+        "query": "客户要求修改验收条款并增加赔付条款",
+        "boundObject": {
+          "objectType": "opportunity",
+          "objectId": "test-opt-004",
+          "objectName": "合同谈判商机D",
+          "source": "mention"
+        }
+      },
+      "expected_behavior": [
+        "调用合同风险 Agent",
+        "调用知识库合同规则",
+        "分析验收+赔付组合风险",
+        "不给法律意见",
+        "建议法务审核"
+      ],
+      "expected_time_seconds": 45
+    },
+    {
+      "id": "complex-review-011",
+      "category": "复杂商机评审",
+      "subcategory": "轻量问答边界",
+      "input": {
+        "query": "CRM系统一般有哪些功能模块",
+        "boundObject": null
+      },
+      "expected_behavior": [
+        "识别为轻量问答",
+        "调用轻量问答 Agent",
+        "不声称已查询 CRM",
+        "给出泛 CRM 功能介绍",
+        "字数控制在 300-500 字"
+      ],
+      "expected_time_seconds": 15
+    },
+    {
+      "id": "complex-review-012",
+      "category": "复杂商机评审",
+      "subcategory": "写回确认闭环",
+      "input": {
+        "query": "评审完帮我生成一条跟进记录并保存",
+        "boundObject": {
+          "objectType": "opportunity",
+          "objectId": "test-opt-001",
+          "objectName": "CRM采购商机A",
+          "source": "mention"
+        }
+      },
+      "expected_behavior": [
+        "先完成多 Agent 评审",
+        "生成评审摘要",
+        "再生成跟进记录草稿",
+        "请求用户确认",
+        "确认后写回并返回 ID"
+      ],
+      "expected_time_seconds": 70,
+      "requires_two_rounds": true,
+      "round_2_input": {
+        "query": "确认保存这条跟进记录"
+      }
+    },
+    {
+      "id": "complex-review-013",
+      "category": "复杂商机评审",
+      "subcategory": "写回取消处理",
+      "input": {
+        "query": "帮我生成跟进计划",
+        "boundObject": {
+          "objectType": "opportunity",
+          "objectId": "test-opt-001",
+          "objectName": "CRM采购商机A",
+          "source": "mention"
+        }
+      },
+      "expected_behavior": [
+        "生成跟进计划草稿",
+        "请求用户确认",
+        "用户取消时不写回",
+        "说明已取消并保留草稿供参考"
+      ],
+      "expected_time_seconds": 30,
+      "requires_two_rounds": true,
+      "round_2_input": {
+        "query": "取消保存"
+      }
+    },
+    {
+      "id": "complex-review-014",
+      "category": "复杂商机评审",
+      "subcategory": "证据边界清晰",
+      "input": {
+        "query": "这个商机的折扣符合政策吗",
+        "boundObject": {
+          "objectType": "opportunity",
+          "objectId": "test-opt-001",
+          "objectName": "CRM采购商机A",
+          "source": "mention"
+        }
+      },
+      "expected_behavior": [
+        "调用知识库折扣规则",
+        "区分 CRM 已确认事实 vs 规则推断 vs 待确认",
+        "明确说明推断依据",
+        "不声称已批准折扣",
+        "给出内部确认建议"
+      ],
+      "expected_time_seconds": 35
+    }
+  ]
+}

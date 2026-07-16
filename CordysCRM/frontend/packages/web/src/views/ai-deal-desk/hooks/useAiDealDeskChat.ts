@@ -4,17 +4,33 @@ import { useMessage } from 'naive-ui';
 import { useI18n } from '@lib/shared/hooks/useI18n';
 
 import { buildProcessSummaryText, normalizeProcessEvents } from '../adapters/dealDeskProcessFallback';
-import { searchDealDeskCustomers, searchDealDeskOpportunities, stopDealDeskChat } from '../api';
-import { formatDealDeskClockTime } from '../dealDeskTime';
+import {
+  createDealDeskConversation,
+  deleteDealDeskConversation,
+  getDealDeskConversation,
+  listDealDeskConversations,
+  saveDealDeskMessage,
+  searchDealDeskCustomers,
+  searchDealDeskOpportunities,
+  stopDealDeskChat,
+  updateDealDeskConversation,
+} from '../api';
+import { formatDealDeskClockTime, formatDealDeskSessionTime } from '../dealDeskTime';
 import createDealDeskDifyProvider from '../providers/dealDeskDifyProvider';
 import type {
   DealDeskAssistantReply,
+  DealDeskBoundObjectPayload,
+  DealDeskConversationSavePayload,
   DealDeskMentionOption,
+  DealDeskMessageSavePayload,
   DealDeskProcessEvent,
   DealDeskProcessEventPayload,
   DealDeskReference,
   DealDeskSession,
+  DealDeskStoredConversationPayload,
+  DealDeskStoredMessagePayload,
   DealDeskTurn,
+  DealDeskWritebackPayload,
 } from '../types';
 import {
   buildCustomerMentionOptionsFromList,
@@ -50,15 +66,16 @@ export default function useAiDealDeskChat(route: RouteLocationNormalizedLoaded) 
   >([]);
   const starters = [
     '看一下华东智造集团有哪些商机',
-    '总结这个商机目前的推进情况',
-    '分析当前付款方案风险',
-    '判断是否需要跨部门协同',
-    '生成下一步跟进建议',
+    '总结华东智造集团AI客服升级项目的推进情况',
+    '分析华东智造集团AI客服升级项目的付款风险',
+    '评审华东智造集团AI客服升级项目是否值得继续推进',
+    '查询京东集团近期在AI客服方面的公开进展',
   ];
   const provider = createDealDeskDifyProvider();
   let isBootstrapping = false;
   let sequence = 0;
   let mentionSearchSequence = 0;
+  let loadSequence = 0;
 
   const activeMentionQuery = computed(() => draftMessage.value.match(/@([^\s@]*)$/)?.[1] ?? '');
   const mentionOptions = ref<DealDeskMentionOption[]>([]);
@@ -97,12 +114,168 @@ export default function useAiDealDeskChat(route: RouteLocationNormalizedLoaded) 
     return {
       id: nextId('session'),
       title,
-      updatedAt: formatDealDeskClockTime(),
+      updatedAt: formatDealDeskSessionTime(),
       group: 'today',
       turns: [],
       boundObject: null,
       conversationId: null,
     };
+  }
+
+  function getSessionGroup(timestamp?: number): DealDeskSession['group'] {
+    if (!timestamp) return 'today';
+    const target = new Date(timestamp);
+    const today = new Date();
+    const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
+    const targetStart = new Date(target.getFullYear(), target.getMonth(), target.getDate()).getTime();
+    if (targetStart === todayStart) return 'today';
+    if (targetStart === todayStart - 24 * 60 * 60 * 1000) return 'yesterday';
+    return 'earlier';
+  }
+
+  function safeParseJson<T>(value?: string | null, fallback?: T): T | undefined {
+    if (!value) return fallback;
+    try {
+      return JSON.parse(value) as T;
+    } catch {
+      return fallback;
+    }
+  }
+
+  function safeStringify(value: unknown) {
+    if (value === undefined || value === null) return null;
+    return JSON.stringify(value);
+  }
+
+  function serializeReferences(references?: DealDeskReference[]) {
+    if (!references?.length) return null;
+    return JSON.stringify(
+      references.map((reference) => ({
+        id: reference.id,
+        label: reference.label,
+        type: reference.type,
+        url: reference.rawFile ? undefined : reference.url,
+        source: reference.source,
+        mimeType: reference.mimeType,
+        uploadFileId: reference.uploadFileId,
+      }))
+    );
+  }
+
+  function mapBoundReferenceToPayload(reference?: DealDeskReference | null): DealDeskBoundObjectPayload | null {
+    if (!reference || (reference.type !== 'customer' && reference.type !== 'opportunity')) {
+      return null;
+    }
+    return {
+      objectType: reference.type,
+      objectId: reference.id,
+      objectName: reference.label.replace(/^@/, ''),
+      source: reference.source || 'mention',
+    };
+  }
+
+  function mapBoundPayloadToReference(payload?: DealDeskBoundObjectPayload | null): DealDeskReference | null {
+    if (!payload) return null;
+    return {
+      id: payload.objectId,
+      label: `@${payload.objectName}`,
+      type: payload.objectType,
+      source: payload.source,
+    };
+  }
+
+  function conversationSavePayload(session: DealDeskSession, lastMessageText?: string): DealDeskConversationSavePayload {
+    return {
+      title: session.title,
+      difyConversationId: session.conversationId || null,
+      boundObjectJson: safeStringify(mapBoundReferenceToPayload(session.boundObject)),
+      lastMessageText: lastMessageText ?? session.turns.at(-1)?.text ?? null,
+    };
+  }
+
+  function messageSavePayload(
+    turn: DealDeskTurn,
+    options: {
+      writeback?: DealDeskWritebackPayload;
+      boundObject?: DealDeskReference | null;
+      difyMessageId?: string;
+    } = {}
+  ): DealDeskMessageSavePayload {
+    return {
+      role: turn.role,
+      content: turn.text || '',
+      referencesJson: serializeReferences(turn.references),
+      processEventsJson: safeStringify(turn.process?.events),
+      writebackJson: safeStringify(options.writeback),
+      boundObjectJson: safeStringify(mapBoundReferenceToPayload(options.boundObject)),
+      difyMessageId: options.difyMessageId || null,
+      status: turn.status || 'default',
+    };
+  }
+
+  function sessionFromStored(conversation: DealDeskStoredConversationPayload, includeMessages = false): DealDeskSession {
+    const boundObject = mapBoundPayloadToReference(
+      safeParseJson<DealDeskBoundObjectPayload>(conversation.boundObjectJson || '')
+    );
+    return {
+      id: conversation.id,
+      remoteId: conversation.id,
+      title: conversation.title || '新会话',
+      updatedAt: conversation.updateTime ? formatDealDeskSessionTime(new Date(conversation.updateTime)) : formatDealDeskSessionTime(),
+      group: getSessionGroup(conversation.updateTime),
+      turns: includeMessages ? (conversation.messages || []).map(turnFromStoredMessage) : [],
+      boundObject,
+      conversationId: conversation.difyConversationId || null,
+    };
+  }
+
+  function turnFromStoredMessage(message: DealDeskStoredMessagePayload): DealDeskTurn {
+    const role = message.role === 'assistant' ? 'assistant' : 'user';
+    const events = safeParseJson<DealDeskProcessEvent[]>(message.processEventsJson || '', []);
+    const references = safeParseJson<DealDeskReference[]>(message.referencesJson || '', []);
+    return {
+      id: message.id,
+      role,
+      text: message.content || '',
+      time: message.createTime ? formatDealDeskClockTime(new Date(message.createTime)) : formatDealDeskClockTime(),
+      references: references?.length ? references : undefined,
+      process:
+        role === 'assistant' && events?.length
+          ? {
+              summary: buildProcessSummaryText(events),
+              expanded: false,
+              events,
+            }
+          : undefined,
+      status: message.status || 'default',
+    };
+  }
+
+  async function ensurePersistedSession(session: DealDeskSession) {
+    if (session.remoteId) return session.remoteId;
+    const persisted = await createDealDeskConversation(conversationSavePayload(session));
+    session.remoteId = persisted.id;
+    session.id = persisted.id;
+    activeSessionId.value = persisted.id;
+    return persisted.id;
+  }
+
+  async function persistMessage(session: DealDeskSession, turn: DealDeskTurn, options?: Parameters<typeof messageSavePayload>[1]) {
+    try {
+      const conversationId = await ensurePersistedSession(session);
+      await saveDealDeskMessage(conversationId, messageSavePayload(turn, options));
+    } catch {
+      Message.warning('历史会话保存失败，本轮对话仍会继续显示。');
+    }
+  }
+
+  async function persistConversation(session: DealDeskSession, lastMessageText?: string) {
+    if (!session.remoteId) return;
+    try {
+      await updateDealDeskConversation(session.remoteId, conversationSavePayload(session, lastMessageText));
+    } catch {
+      Message.warning('历史会话信息更新失败。');
+    }
   }
 
   function resetFromRoute() {
@@ -118,18 +291,63 @@ export default function useAiDealDeskChat(route: RouteLocationNormalizedLoaded) 
     isBootstrapping = false;
   }
 
+  async function loadStoredSessionDetail(sessionId: string) {
+    const stored = await getDealDeskConversation(sessionId);
+    if (!stored?.id) return;
+    const detail = sessionFromStored(stored, true);
+    const index = sessions.value.findIndex((item) => item.id === sessionId || item.remoteId === sessionId);
+    if (index >= 0) {
+      sessions.value.splice(index, 1, detail);
+    } else {
+      sessions.value.unshift(detail);
+    }
+    activeSessionId.value = detail.id;
+  }
+
+  async function loadStoredConversations() {
+    const currentLoad = ++loadSequence;
+    isBootstrapping = true;
+    try {
+      const routeReference = getRouteReference(route.query as Record<string, unknown>);
+      const conversations = await listDealDeskConversations(50);
+      if (currentLoad !== loadSequence) return;
+
+      if (!conversations.length) {
+        resetFromRoute();
+        composerReferences.value = routeReference ? [routeReference] : [];
+        return;
+      }
+
+      sessions.value = conversations.map((conversation) => sessionFromStored(conversation));
+      activeSessionId.value = sessions.value[0]?.id || '';
+      draftMessage.value = '';
+      composerReferences.value = routeReference ? [routeReference] : [];
+      mentionOpen.value = false;
+      mentionOptions.value = [];
+
+      if (activeSessionId.value) {
+        await loadStoredSessionDetail(activeSessionId.value);
+      }
+    } catch {
+      resetFromRoute();
+      Message.warning('历史会话加载失败，已切换到临时会话。');
+    } finally {
+      isBootstrapping = false;
+    }
+  }
+
   function updateSession(mutator: (session: DealDeskSession) => void) {
     const session = activeSession.value;
     if (!session) return;
     mutator(session);
-    session.updatedAt = formatDealDeskClockTime();
+    session.updatedAt = formatDealDeskSessionTime();
   }
 
   function updateSessionById(sessionId: string, mutator: (session: DealDeskSession) => void) {
     const session = sessions.value.find((item) => item.id === sessionId);
     if (!session) return;
     mutator(session);
-    session.updatedAt = formatDealDeskClockTime();
+    session.updatedAt = formatDealDeskSessionTime();
   }
 
   function applyAssistantReplyState(session: DealDeskSession, reply: DealDeskAssistantReply) {
@@ -164,12 +382,58 @@ export default function useAiDealDeskChat(route: RouteLocationNormalizedLoaded) 
 
   function createNewSession() {
     const session = createEmptySession();
-    sessions.value = [session, ...sessions.value.filter((item) => item.turns.length > 0)];
+    sessions.value = [session, ...sessions.value.filter((item) => item.turns.length > 0 || item.remoteId)];
     activeSessionId.value = session.id;
     draftMessage.value = '';
     composerReferences.value = [];
     mentionOptions.value = [];
     mentionOpen.value = false;
+  }
+
+  async function selectSession(sessionId: string) {
+    if (sessionId === activeSessionId.value) return;
+    const target = sessions.value.find((item) => item.id === sessionId);
+    if (!target) return;
+    activeSessionId.value = sessionId;
+    if (target.remoteId && target.turns.length === 0) {
+      try {
+        await loadStoredSessionDetail(target.remoteId);
+      } catch {
+        Message.warning('历史会话详情加载失败。');
+      }
+    }
+  }
+
+  async function deleteSession(sessionId: string) {
+    const target = sessions.value.find((item) => item.id === sessionId);
+    if (!target) return;
+    if (!window.confirm('确定删除该历史会话吗？')) return;
+
+    const generation = activeGenerations.value.find((item) => item.sessionId === sessionId);
+    if (generation) {
+      generation.abortController.abort();
+      activeGenerations.value = activeGenerations.value.filter((item) => item.sessionId !== sessionId);
+    }
+
+    try {
+      if (target.remoteId) {
+        await deleteDealDeskConversation(target.remoteId);
+      }
+      const wasActive = activeSessionId.value === sessionId;
+      sessions.value = sessions.value.filter((item) => item.id !== sessionId);
+      if (wasActive) {
+        const nextSession = sessions.value[0] || createEmptySession();
+        if (!sessions.value.length) {
+          sessions.value = [nextSession];
+        }
+        activeSessionId.value = nextSession.id;
+        if (nextSession.remoteId && nextSession.turns.length === 0) {
+          await loadStoredSessionDetail(nextSession.remoteId);
+        }
+      }
+    } catch {
+      Message.error('删除历史会话失败，请稍后重试。');
+    }
   }
 
   function toggleProcess(turnId: string) {
@@ -464,6 +728,7 @@ export default function useAiDealDeskChat(route: RouteLocationNormalizedLoaded) 
       }
     }
 
+    let finalAssistantTurnId = '';
     updateSessionById(sessionId, (currentSession) => {
       applyAssistantReplyState(currentSession, reply);
       const pendingTurnIndex = currentSession.turns.findIndex((turn) => turn.id === pendingAssistantTurn.id);
@@ -471,10 +736,24 @@ export default function useAiDealDeskChat(route: RouteLocationNormalizedLoaded) 
         const currentPendingTurn = currentSession.turns[pendingTurnIndex];
         const assistantTurn = buildResolvedAssistantTurn(currentPendingTurn, reply.turn);
         currentSession.turns.splice(pendingTurnIndex, 1, assistantTurn);
+        finalAssistantTurnId = assistantTurn.id;
         return;
       }
-      currentSession.turns.push(createAssistantTurn(reply.turn));
+      const assistantTurn = createAssistantTurn(reply.turn);
+      currentSession.turns.push(assistantTurn);
+      finalAssistantTurnId = assistantTurn.id;
     });
+
+    const finalSession = sessions.value.find((item) => item.id === sessionId);
+    const finalAssistantTurn = finalSession?.turns.find((turn) => turn.id === finalAssistantTurnId);
+    if (finalSession && finalAssistantTurn) {
+      await persistMessage(finalSession, finalAssistantTurn, {
+        writeback: reply.writeback,
+        boundObject: finalSession.boundObject,
+        difyMessageId: reply.messageId,
+      });
+      await persistConversation(finalSession, finalAssistantTurn.text);
+    }
 
     activeGenerations.value = activeGenerations.value.filter((item) => item.pendingTurnId !== pendingAssistantTurn.id);
   }
@@ -511,6 +790,9 @@ export default function useAiDealDeskChat(route: RouteLocationNormalizedLoaded) 
 
     const session = activeSession.value;
     if (!session) return;
+    await persistMessage(session, userTurn, {
+      boundObject,
+    });
     const sessionId = session.id;
 
     await runAssistantGeneration({
@@ -587,7 +869,9 @@ export default function useAiDealDeskChat(route: RouteLocationNormalizedLoaded) 
   watch(
     () => route.fullPath,
     () => {
-      resetFromRoute();
+      loadStoredConversations().catch(() => {
+        resetFromRoute();
+      });
     },
     { immediate: true }
   );
@@ -624,6 +908,8 @@ export default function useAiDealDeskChat(route: RouteLocationNormalizedLoaded) 
     isStopping,
     starters,
     mentionOptions,
+    selectSession,
+    deleteSession,
     createNewSession,
     toggleProcess,
     removeReference,

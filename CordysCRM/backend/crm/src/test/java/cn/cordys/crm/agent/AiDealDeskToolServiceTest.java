@@ -28,6 +28,7 @@ class AiDealDeskToolServiceTest {
         for (String methodName : List.of(
                 "searchCustomers",
                 "searchOpportunities",
+                "resolveCrmObject",
                 "getCustomerContext",
                 "getOpportunityContext",
                 "createFollowRecord",
@@ -169,6 +170,123 @@ class AiDealDeskToolServiceTest {
 
         assertFalse(response.isSuccess());
         assertEquals("OBJECT_NOT_FOUND", response.getCode());
+    }
+
+    @Test
+    void shouldRequireObjectReferenceWhenResolvingCrmObject() {
+        AiDealDeskToolService service = new AiDealDeskToolService(new FakeGateway());
+
+        DealDeskToolResponse response = service.resolveCrmObject(new DealDeskToolRequest());
+
+        assertFalse(response.isSuccess());
+        assertEquals("INVALID_ARGUMENT", response.getCode());
+    }
+
+    @Test
+    void shouldPreferExactOpportunityOverFuzzyCustomer() {
+        FakeGateway gateway = new FakeGateway();
+        gateway.customers.add(mapOf("id", "customer-1", "name", "华东智造集团"));
+        gateway.opportunities.add(mapOf(
+                "id", "opportunity-1",
+                "name", "华东智造集团AI客服升级项目",
+                "customerId", "customer-1",
+                "customerName", "华东智造集团"
+        ));
+        AiDealDeskToolService service = new AiDealDeskToolService(gateway);
+
+        DealDeskToolResponse response = service.resolveCrmObject(objectReferenceRequest("华东智造集团AI客服升级项目"));
+
+        assertTrue(response.isSuccess());
+        assertEquals("resolved_object", response.getData().get("resultType"));
+        assertEquals("exact", response.getData().get("matchType"));
+        Map<?, ?> resolvedObject = (Map<?, ?>) response.getData().get("resolvedObject");
+        assertEquals("opportunity", resolvedObject.get("objectType"));
+        assertEquals("opportunity-1", resolvedObject.get("objectId"));
+    }
+
+    @Test
+    void shouldPreferExactCustomerOverOpportunitiesContainingCustomerName() {
+        FakeGateway gateway = new FakeGateway();
+        gateway.customers.add(mapOf("id", "customer-1", "name", "华东智造集团"));
+        gateway.opportunities.add(mapOf(
+                "id", "opportunity-1",
+                "name", "华东智造集团AI客服升级项目",
+                "customerId", "customer-1",
+                "customerName", "华东智造集团"
+        ));
+        gateway.opportunities.add(mapOf(
+                "id", "opportunity-2",
+                "name", "华东智造集团客户运营洞察扩容",
+                "customerId", "customer-1",
+                "customerName", "华东智造集团"
+        ));
+        AiDealDeskToolService service = new AiDealDeskToolService(gateway);
+
+        DealDeskToolResponse response = service.resolveCrmObject(objectReferenceRequest("华东智造集团"));
+
+        assertTrue(response.isSuccess());
+        assertEquals("exact", response.getData().get("matchType"));
+        Map<?, ?> resolvedObject = (Map<?, ?>) response.getData().get("resolvedObject");
+        assertEquals("customer", resolvedObject.get("objectType"));
+        assertEquals("customer-1", resolvedObject.get("objectId"));
+    }
+
+    @Test
+    void shouldNormalizeSpacesAndPunctuationForExactMatch() {
+        FakeGateway gateway = new FakeGateway();
+        gateway.customers.add(mapOf("id", "customer-1", "name", "华东智造集团"));
+        AiDealDeskToolService service = new AiDealDeskToolService(gateway);
+
+        DealDeskToolResponse response = service.resolveCrmObject(objectReferenceRequest("华东 智造-集团"));
+
+        assertTrue(response.isSuccess());
+        assertEquals("exact", response.getData().get("matchType"));
+        Map<?, ?> resolvedObject = (Map<?, ?>) response.getData().get("resolvedObject");
+        assertEquals("customer", resolvedObject.get("objectType"));
+    }
+
+    @Test
+    void shouldResolveSingleFuzzyCandidate() {
+        FakeGateway gateway = new FakeGateway();
+        gateway.opportunities.add(mapOf("id", "opportunity-1", "name", "华东智造集团AI客服升级项目"));
+        AiDealDeskToolService service = new AiDealDeskToolService(gateway);
+
+        DealDeskToolResponse response = service.resolveCrmObject(objectReferenceRequest("AI客服升级"));
+
+        assertTrue(response.isSuccess());
+        assertEquals("unique_fuzzy", response.getData().get("matchType"));
+        Map<?, ?> resolvedObject = (Map<?, ?>) response.getData().get("resolvedObject");
+        assertEquals("opportunity", resolvedObject.get("objectType"));
+    }
+
+    @Test
+    void shouldAskForClarificationWhenMultipleFuzzyCandidatesRemain() {
+        FakeGateway gateway = new FakeGateway();
+        gateway.customers.add(mapOf("id", "customer-1", "name", "华东智造集团"));
+        gateway.opportunities.add(mapOf("id", "opportunity-1", "name", "华东智造集团AI客服升级项目"));
+        AiDealDeskToolService service = new AiDealDeskToolService(gateway);
+
+        DealDeskToolResponse response = service.resolveCrmObject(objectReferenceRequest("华东智造"));
+
+        assertFalse(response.isSuccess());
+        assertEquals("OBJECT_AMBIGUOUS", response.getCode());
+        assertEquals("candidate_list", response.getData().get("resultType"));
+        assertEquals(2, response.getData().get("count"));
+        List<?> candidates = (List<?>) response.getData().get("candidates");
+        assertEquals(List.of("customer", "opportunity"), candidates.stream()
+                .map(candidate -> ((Map<?, ?>) candidate).get("objectType"))
+                .toList());
+    }
+
+    @Test
+    void shouldReturnObjectNotFoundWhenResolverFindsNothing() {
+        AiDealDeskToolService service = new AiDealDeskToolService(new FakeGateway());
+
+        DealDeskToolResponse response = service.resolveCrmObject(objectReferenceRequest("不存在的项目"));
+
+        assertFalse(response.isSuccess());
+        assertEquals("OBJECT_NOT_FOUND", response.getCode());
+        assertEquals(0, response.getData().get("count"));
     }
 
     @Test
@@ -432,6 +550,12 @@ class AiDealDeskToolServiceTest {
     private static DealDeskToolRequest request(String keyword) {
         DealDeskToolRequest request = new DealDeskToolRequest();
         request.setKeyword(keyword);
+        return request;
+    }
+
+    private static DealDeskToolRequest objectReferenceRequest(String objectReference) {
+        DealDeskToolRequest request = new DealDeskToolRequest();
+        request.setObjectReference(objectReference);
         return request;
     }
 

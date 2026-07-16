@@ -7,12 +7,14 @@ import org.apache.commons.lang3.StringUtils;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
+import java.text.Normalizer;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.Collections;
-import java.util.LinkedHashSet;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -94,6 +96,107 @@ public class AiDealDeskToolService {
         } catch (RuntimeException e) {
             return failureFromException(e, "CRM_READ_FAILED", "商机查询失败。");
         }
+    }
+
+    public DealDeskToolResponse resolveCrmObject(DealDeskToolRequest request) {
+        try {
+            String objectReference = request == null ? "" : StringUtils.trimToEmpty(request.getObjectReference());
+            if (StringUtils.isBlank(objectReference)) {
+                return DealDeskToolResponse.fail("INVALID_ARGUMENT", "请输入需要解析的客户或商机名称。");
+            }
+
+            int limit = resolveLimit(request);
+            List<Map<String, Object>> candidates = new ArrayList<>();
+            for (Map<String, Object> customer : safeList(gateway.searchCustomers(objectReference, limit))) {
+                candidates.add(toObjectCandidate(customer, "customer", objectReference));
+            }
+            for (Map<String, Object> opportunity : safeList(gateway.searchOpportunities(objectReference, limit))) {
+                candidates.add(toObjectCandidate(opportunity, "opportunity", objectReference));
+            }
+
+            candidates = deduplicateObjectCandidates(candidates);
+            List<Map<String, Object>> exactMatches = candidates.stream()
+                    .filter(candidate -> "exact".equals(candidate.get("matchType")))
+                    .toList();
+
+            if (exactMatches.size() == 1) {
+                return resolvedObjectResponse(exactMatches.getFirst(), "exact");
+            }
+            if (exactMatches.size() > 1) {
+                return ambiguousObjectResponse(exactMatches);
+            }
+            if (candidates.size() == 1) {
+                return resolvedObjectResponse(candidates.getFirst(), "unique_fuzzy");
+            }
+            if (candidates.isEmpty()) {
+                return DealDeskToolResponse.fail(
+                        "OBJECT_NOT_FOUND",
+                        "未找到匹配的客户或商机。",
+                        candidateListData(candidates)
+                );
+            }
+            return ambiguousObjectResponse(candidates);
+        } catch (RuntimeException e) {
+            return failureFromException(e, "CRM_READ_FAILED", "CRM 对象解析失败。");
+        }
+    }
+
+    private Map<String, Object> toObjectCandidate(Map<String, Object> source, String objectType, String objectReference) {
+        Map<String, Object> candidate = new LinkedHashMap<>();
+        String objectId = asText(source.get("id"));
+        String objectName = asText(source.get("name"));
+        candidate.put("objectType", objectType);
+        candidate.put("objectId", objectId);
+        candidate.put("objectName", objectName);
+        candidate.put("matchType", normalizeObjectName(objectName).equals(normalizeObjectName(objectReference)) ? "exact" : "fuzzy");
+        candidate.put("source", "crm_resolver");
+        putIfPresent(candidate, "customerId", source.get("customerId"));
+        putIfPresent(candidate, "customerName", source.get("customerName"));
+        putIfPresent(candidate, "stageName", source.get("stageName"));
+        putIfPresent(candidate, "amount", source.get("amount"));
+        putIfPresent(candidate, "ownerName", source.get("ownerName"));
+        return candidate;
+    }
+
+    private List<Map<String, Object>> deduplicateObjectCandidates(List<Map<String, Object>> candidates) {
+        Map<String, Map<String, Object>> unique = new LinkedHashMap<>();
+        for (Map<String, Object> candidate : candidates) {
+            String key = asText(candidate.get("objectType")) + ":" + asText(candidate.get("objectId"));
+            unique.putIfAbsent(key, candidate);
+        }
+        return new ArrayList<>(unique.values());
+    }
+
+    private DealDeskToolResponse resolvedObjectResponse(Map<String, Object> candidate, String matchType) {
+        Map<String, Object> resolved = new LinkedHashMap<>(candidate);
+        resolved.put("matchType", matchType);
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("resultType", "resolved_object");
+        data.put("matchType", matchType);
+        data.put("resolvedObject", resolved);
+        return DealDeskToolResponse.ok(data);
+    }
+
+    private DealDeskToolResponse ambiguousObjectResponse(List<Map<String, Object>> candidates) {
+        return DealDeskToolResponse.fail(
+                "OBJECT_AMBIGUOUS",
+                "找到多个匹配的客户或商机，请先确认完整名称。",
+                candidateListData(candidates)
+        );
+    }
+
+    private Map<String, Object> candidateListData(List<Map<String, Object>> candidates) {
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("resultType", "candidate_list");
+        data.put("count", candidates.size());
+        data.put("candidates", candidates);
+        return data;
+    }
+
+    private String normalizeObjectName(String value) {
+        return Normalizer.normalize(StringUtils.defaultString(value), Normalizer.Form.NFKC)
+                .toLowerCase(Locale.ROOT)
+                .replaceAll("[\\s\\p{Z}\\p{P}]+", "");
     }
 
     private List<Map<String, Object>> searchOpportunitiesWithFallback(String keyword, int limit) {

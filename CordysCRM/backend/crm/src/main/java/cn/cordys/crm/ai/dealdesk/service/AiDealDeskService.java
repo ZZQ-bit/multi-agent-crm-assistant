@@ -58,35 +58,45 @@ public class AiDealDeskService {
     private static final int DIFY_CHAT_MAX_ATTEMPTS = 3;
     private static final int DIFY_FILE_UPLOAD_MAX_ATTEMPTS = 3;
     private static final int STREAMING_ANSWER_DELTA_CHARS = 48;
-    private record WorkflowProcessNode(String eventType, boolean completesOnFinish) {
+    private record WorkflowProcessNode(
+            String eventType,
+            String runningText,
+            String completedText,
+            String failedText
+    ) {
     }
 
     private static final Map<String, WorkflowProcessNode> WORKFLOW_PROCESS_NODES = Map.ofEntries(
-            entry("主 Agent - 参数抽取", new WorkflowProcessNode("task_identified", false)),
-            entry("主 Agent - 路由判断", new WorkflowProcessNode("task_identified", true)),
-            entry("主 Agent - 上下文标准化", new WorkflowProcessNode("context_loaded", false)),
-            entry("主 Agent - CRM 工具调用规划", new WorkflowProcessNode("context_loaded", false)),
-            entry("主 Agent - CRM 工具调用判断", new WorkflowProcessNode("context_loaded", false)),
-            entry("CRM Tool API 请求", new WorkflowProcessNode("context_loaded", false)),
-            entry("主 Agent - CRM 上下文标准化", new WorkflowProcessNode("context_loaded", true)),
-            entry("规则知识库检索", new WorkflowProcessNode("context_loaded", true)),
-            entry("规则召回结果标准化", new WorkflowProcessNode("rule_checked", true)),
-            entry("轻量问答 Agent", new WorkflowProcessNode("suggestion_generated", false)),
-            entry("销售运营 Agent", new WorkflowProcessNode("suggestion_generated", false)),
-            entry("财务专项 Agent", new WorkflowProcessNode("suggestion_generated", false)),
-            entry("交付专项 Agent", new WorkflowProcessNode("suggestion_generated", false)),
-            entry("合同专项 Agent", new WorkflowProcessNode("suggestion_generated", false)),
-            entry("销售评估 Agent", new WorkflowProcessNode("suggestion_generated", false)),
-            entry("财务风控 Agent", new WorkflowProcessNode("suggestion_generated", false)),
-            entry("交付可行性 Agent", new WorkflowProcessNode("suggestion_generated", false)),
-            entry("合同风险 Agent", new WorkflowProcessNode("suggestion_generated", false)),
-            entry("协调总结 Agent", new WorkflowProcessNode("suggestion_generated", false)),
-            entry("最终输出 - 轻量回答", new WorkflowProcessNode("suggestion_generated", true)),
-            entry("最终输出 - 财务专项", new WorkflowProcessNode("suggestion_generated", true)),
-            entry("最终输出 - 交付专项", new WorkflowProcessNode("suggestion_generated", true)),
-            entry("最终输出 - 合同专项", new WorkflowProcessNode("suggestion_generated", true)),
-            entry("最终输出 - 销售运营任务", new WorkflowProcessNode("suggestion_generated", true)),
-            entry("最终输出 - 多Agent智能助手 业务判断", new WorkflowProcessNode("suggestion_generated", true))
+            entry("task_planner", new WorkflowProcessNode(
+                    "task_understanding", "正在理解本轮任务", "已理解本轮任务", "任务理解失败")),
+            entry("attachment_image_summary", new WorkflowProcessNode(
+                    "attachment_analysis", "正在解析附件内容", "已解析附件内容", "附件解析失败")),
+            entry("crm_read_request", new WorkflowProcessNode(
+                    "crm_retrieval", "正在读取 CRM 资料", "已读取 CRM 资料", "CRM 资料读取失败")),
+            entry("deal_rules_knowledge", new WorkflowProcessNode(
+                    "knowledge_retrieval", "正在检索业务规则", "已检索业务规则", "业务规则检索失败")),
+            entry("external_intel_agent", new WorkflowProcessNode(
+                    "external_research", "正在查询公开资料", "已查询公开资料", "公开资料查询失败")),
+            entry("sales_agent", new WorkflowProcessNode(
+                    "sales_analysis", "正在进行销售分析", "已完成销售分析", "销售分析失败")),
+            entry("finance_agent", new WorkflowProcessNode(
+                    "finance_analysis", "正在进行财务分析", "已完成财务分析", "财务分析失败")),
+            entry("delivery_agent", new WorkflowProcessNode(
+                    "delivery_analysis", "正在进行交付分析", "已完成交付分析", "交付分析失败")),
+            entry("legal_agent", new WorkflowProcessNode(
+                    "legal_analysis", "正在进行合同分析", "已完成合同分析", "合同分析失败")),
+            entry("analytics_agent", new WorkflowProcessNode(
+                    "analytics_analysis", "正在进行经营分析", "已完成经营分析", "经营分析失败")),
+            entry("simple_answer", new WorkflowProcessNode(
+                    "answer_generation", "正在整理回答", "已生成回答", "回答生成失败")),
+            entry("image_answer", new WorkflowProcessNode(
+                    "answer_generation", "正在整理回答", "已生成回答", "回答生成失败")),
+            entry("crm_light_answer", new WorkflowProcessNode(
+                    "answer_generation", "正在整理回答", "已生成回答", "回答生成失败")),
+            entry("gap_answer", new WorkflowProcessNode(
+                    "answer_generation", "正在整理回答", "已生成回答", "回答生成失败")),
+            entry("business_answer_agent", new WorkflowProcessNode(
+                    "answer_generation", "正在汇总结论", "已生成结论", "结论生成失败"))
     );
     private static final Map<String, String> CONVERSATION_VARIABLE_IDS = Map.of(
             "active_writeback_id", "0fcbcff0-3c62-4f0f-a2cb-7d4f88b54811",
@@ -498,6 +508,8 @@ public class AiDealDeskService {
         List<Map<String, Object>> processEvents = new ArrayList<>();
         List<String> eventTypes = new ArrayList<>();
         List<String> workflowOutputKeys = new ArrayList<>();
+        Map<String, Object> recoveredWorkflowOutputs = new LinkedHashMap<>();
+        Map<String, Object> finishedWorkflowOutputs = new LinkedHashMap<>();
         String workflowError = "";
 
         try (BufferedReader reader = new BufferedReader(new StringReader(StringUtils.defaultString(sseBody)))) {
@@ -512,6 +524,7 @@ public class AiDealDeskService {
                 String eventType = asText(event.get("event"));
                 eventTypes.add(eventType);
                 appendWorkflowProcessEvent(processEvents, eventType, event);
+                collectWorkflowProtocolOutputs(recoveredWorkflowOutputs, eventType, event);
                 if ("message".equals(eventType)) {
                     appendIfPresent(answer, asText(event.get("answer")));
                     putIfPresent(response, "conversation_id", event.get("conversation_id"));
@@ -527,10 +540,11 @@ public class AiDealDeskService {
                     }
                     workflowOutputKeys.clear();
                     workflowOutputKeys.addAll(outputs.keySet());
+                    finishedWorkflowOutputs.clear();
+                    finishedWorkflowOutputs.putAll(outputs);
                     if (StringUtils.isBlank(answer) && outputs.containsKey("answer")) {
                         appendIfPresent(answer, asText(outputs.get("answer")));
                     }
-                    response.put("metadata", Map.of("workflow_outputs", outputs));
                 }
             }
         } catch (IOException e) {
@@ -549,7 +563,16 @@ public class AiDealDeskService {
             outputs.put("protocolVersion", "1.0");
             outputs.put("turnType", "failed");
             outputs.put("answerText", failureMessage);
-            response.put("metadata", Map.of("workflow_outputs", outputs));
+            finishedWorkflowOutputs.clear();
+            finishedWorkflowOutputs.putAll(outputs);
+        }
+
+        Map<String, Object> combinedWorkflowOutputs = new LinkedHashMap<>(recoveredWorkflowOutputs);
+        combinedWorkflowOutputs.putAll(finishedWorkflowOutputs);
+        if (!combinedWorkflowOutputs.isEmpty()) {
+            response.put("metadata", Map.of("workflow_outputs", combinedWorkflowOutputs));
+            workflowOutputKeys.clear();
+            workflowOutputKeys.addAll(combinedWorkflowOutputs.keySet());
         }
 
         response.put("answer", answer.toString());
@@ -571,6 +594,116 @@ public class AiDealDeskService {
                     workflowOutputKeys);
         }
         return JSON.toJSONString(response);
+    }
+
+    private void collectWorkflowProtocolOutputs(
+            Map<String, Object> target,
+            String eventType,
+            Map<String, Object> event
+    ) {
+        if (target == null || !"node_finished".equals(eventType) || event == null) {
+            return;
+        }
+
+        Map<String, Object> data = parseMap(event.get("data"));
+        Map<String, Object> outputs = parseMap(data.get("outputs"));
+        if (outputs.isEmpty()) {
+            return;
+        }
+
+        Map<String, Object> node = extractNode(event);
+        String nodeId = firstNonBlank(asText(data.get("node_id")), asText(node.get("id")));
+        if ("task_plan_normalize".equals(nodeId)) {
+            String taskType = asText(outputs.get("task_type"));
+            String resolutionStatus = asText(outputs.get("resolution_status"));
+            String turnType = mapTaskTypeToTurnType(taskType, resolutionStatus);
+            if (StringUtils.isNotBlank(turnType)) {
+                target.put("turnType", turnType);
+            }
+            return;
+        }
+
+        if ("evidence_ledger".equals(nodeId)) {
+            Map<String, Object> boundObject = normalizeRecoveredBoundObject(
+                    parseMap(outputs.get("target_object_json"))
+            );
+            if (!boundObject.isEmpty()) {
+                target.put("boundObject", boundObject);
+            }
+            return;
+        }
+
+        if ("protocol_adapter".equals(nodeId)) {
+            Map<String, Object> protocol = parseMap(outputs.get("protocol_answer"));
+            if (!protocol.isEmpty()) {
+                target.putAll(protocol);
+            }
+        }
+    }
+
+    private String mapTaskTypeToTurnType(String taskType, String resolutionStatus) {
+        String normalizedTaskType = StringUtils.trimToEmpty(taskType);
+        if ("object_query".equals(normalizedTaskType)) {
+            boolean unresolved = containsAny(
+                    StringUtils.lowerCase(StringUtils.trimToEmpty(resolutionStatus)),
+                    "ambiguous",
+                    "missing",
+                    "not_found"
+            );
+            return unresolved ? "object_select" : "quick_answer";
+        }
+
+        return switch (normalizedTaskType) {
+            case "general_chat", "image_answer" -> "quick_answer";
+            case "full_review" -> "deep_deal_review_brief";
+            case "stats_analysis" -> "stats_query";
+            case "progress_summary", "sales_assist", "finance_check", "delivery_check", "legal_check",
+                    "content_draft", "followup_plan", "external_research" -> "text_analysis";
+            default -> "";
+        };
+    }
+
+    private Map<String, Object> normalizeRecoveredBoundObject(Map<String, Object> value) {
+        if (value == null || value.isEmpty()) {
+            return Collections.emptyMap();
+        }
+
+        String objectType = firstNonBlank(
+                asText(value.get("objectType")),
+                asText(value.get("object_type")),
+                asText(value.get("type"))
+        );
+        String objectId = firstNonBlank(
+                asText(value.get("objectId")),
+                asText(value.get("object_id")),
+                asText(value.get("id"))
+        );
+        if (StringUtils.isBlank(objectType) || StringUtils.isBlank(objectId)) {
+            return Collections.emptyMap();
+        }
+
+        Map<String, Object> boundObject = new LinkedHashMap<>();
+        boundObject.put("objectType", objectType);
+        boundObject.put("objectId", objectId);
+        putIfPresent(boundObject, "objectName", firstNonBlank(
+                asText(value.get("objectName")),
+                asText(value.get("object_name")),
+                asText(value.get("name"))
+        ));
+        putIfPresent(boundObject, "source", value.get("source"));
+        putIfPresent(boundObject, "customerId", firstNonBlank(
+                asText(value.get("customerId")),
+                asText(value.get("customer_id"))
+        ));
+        putIfPresent(boundObject, "customerName", firstNonBlank(
+                asText(value.get("customerName")),
+                asText(value.get("customer_name"))
+        ));
+        putIfPresent(boundObject, "relationTarget", firstNonBlank(
+                asText(value.get("relationTarget")),
+                asText(value.get("relation_target"))
+        ));
+        return boundObject;
     }
 
     private Map<String, Object> adaptStreamingFrame(String payload) {
@@ -683,15 +816,6 @@ public class AiDealDeskService {
             return Collections.emptyMap();
         }
 
-        if ("workflow_started".equals(eventType)) {
-            return buildEvent(
-                    firstNonBlank(asText(event.get("workflow_run_id")), "workflow-started"),
-                    "task_identified",
-                    "running",
-                    buildProcessEventText("task_identified", "running")
-            );
-        }
-
         if (!"node_started".equals(eventType) && !"node_finished".equals(eventType)) {
             return Collections.emptyMap();
         }
@@ -702,13 +826,12 @@ public class AiDealDeskService {
                 ? mapWorkflowNodeStatus(firstNonBlank(asText(data.get("status")), asText(event.get("status"))))
                 : "running";
         String nodeId = firstNonBlank(
-                asText(node.get("id")),
                 asText(data.get("node_id")),
+                asText(node.get("id")),
                 asText(event.get("task_id")),
                 "workflow-node"
         );
-        String nodeTitle = extractWorkflowNodeTitle(node);
-        return mapWorkflowProcessEventByNode(nodeId, nodeTitle, eventType, status);
+        return mapWorkflowProcessEventByNode(nodeId, eventType, status);
     }
 
     private String mapWorkflowNodeStatus(String status) {
@@ -761,21 +884,28 @@ public class AiDealDeskService {
         if ("writeback_completed".equals(type)) {
             return running ? "正在写入 CRM" : "已完成 CRM 写入";
         }
+        WorkflowProcessNode processNode = WORKFLOW_PROCESS_NODES.values().stream()
+                .filter(node -> node.eventType().equals(type))
+                .findFirst()
+                .orElse(null);
+        if (processNode != null) {
+            return running ? processNode.runningText() : processNode.completedText();
+        }
         return running ? "正在识别本轮任务" : "已识别本轮任务";
     }
 
-    private Map<String, Object> mapWorkflowProcessEventByNode(String nodeId, String nodeTitle, String eventType, String status) {
-        if (StringUtils.isBlank(nodeTitle)) {
+    private Map<String, Object> mapWorkflowProcessEventByNode(String nodeId, String eventType, String status) {
+        if (StringUtils.isBlank(nodeId)) {
             return Collections.emptyMap();
         }
 
-        WorkflowProcessNode processNode = WORKFLOW_PROCESS_NODES.get(nodeTitle);
+        WorkflowProcessNode processNode = WORKFLOW_PROCESS_NODES.get(nodeId);
         if (processNode == null) {
             return Collections.emptyMap();
         }
 
         if ("failed".equals(status)) {
-            return buildEvent(nodeId, "failed", "failed", buildProcessEventText("failed", "failed"));
+            return buildEvent(nodeId, processNode.eventType(), "failed", processNode.failedText());
         }
 
         if ("node_started".equals(eventType)) {
@@ -783,7 +913,7 @@ public class AiDealDeskService {
                     nodeId,
                     processNode.eventType(),
                     "running",
-                    buildProcessEventText(processNode.eventType(), "running")
+                    processNode.runningText()
             );
         }
 
@@ -791,24 +921,12 @@ public class AiDealDeskService {
             return Collections.emptyMap();
         }
 
-        if (processNode.completesOnFinish()) {
-            return buildEvent(
-                    nodeId,
-                    processNode.eventType(),
-                    status,
-                    buildProcessEventText(processNode.eventType(), status)
-            );
-        }
-
-        return Collections.emptyMap();
-    }
-
-    private String extractWorkflowNodeTitle(Map<String, Object> node) {
-        return StringUtils.trimToEmpty(firstNonBlank(
-                asText(node.get("title")),
-                asText(node.get("name")),
-                asText(parseMap(node.get("data")).get("title"))
-        ));
+        return buildEvent(
+                nodeId,
+                processNode.eventType(),
+                status,
+                processNode.completedText()
+        );
     }
 
     private Map<String, Object> extractNode(Map<String, Object> event) {
@@ -1035,7 +1153,12 @@ public class AiDealDeskService {
             normalizedEvent.put("id", firstNonBlank(asText(event.get("id")), "event-" + type));
             normalizedEvent.put("type", type);
             normalizedEvent.put("status", status);
-            normalizedEvent.put("text", buildProcessEventText(type, status));
+            String defaultText = buildProcessEventText(type, status);
+            boolean currentWorkflowType = WORKFLOW_PROCESS_NODES.values().stream()
+                    .anyMatch(node -> node.eventType().equals(type));
+            normalizedEvent.put("text", currentWorkflowType
+                    ? firstNonBlank(asText(event.get("text")), defaultText)
+                    : defaultText);
             normalized.add(normalizedEvent);
         }
         return normalized;

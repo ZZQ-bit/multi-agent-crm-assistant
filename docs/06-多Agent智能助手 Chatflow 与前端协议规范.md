@@ -4,8 +4,8 @@
 | --- | --- |
 | 文档名称 | 多Agent智能助手 Chatflow 与前端协议规范 |
 | 所属系统 | CordysCRM / 多Agent智能助手 |
-| 文档版本 | v1.0 |
-| 更新时间 | 2026-07-06 |
+| 文档版本 | v1.1 |
+| 更新时间 | 2026-07-16 |
 | 当前阶段 | V3 Stable Enhanced 只读 Chatflow / 前端协议收口 |
 | 主要读者 | 前端、AI 应用开发、产品 |
 
@@ -14,7 +14,7 @@
 
 ## 1. 文档目的
 
-当前前端已经有 多Agent智能助手 工作台页面、真实对话 hook、判断过程和对话式写入确认。当前公开版 Chatflow 以 `chatflows/ai-deal-desk-v3.example.yml` 为准，已经改为“Planner 任务规划、统一证据台账、按需多 Agent、统一协议适配”的只读链路；P0 不再依赖 mock provider 或候选对象卡片协议。
+当前前端已经有 多Agent智能助手 工作台页面、真实对话 hook、判断过程和对话式写入确认。当前 Chatflow 以 `chatflows/ai-deal-desk-v3.example.yml` 为准，已经改为“Planner 任务规划、统一证据台账、按需多 Agent、统一协议适配”的只读链路；P0 不再依赖 mock provider 或候选对象卡片协议。
 
 接下来接入真实 Chatflow 之前，必须先固定一份前后端协议，避免前端直接解析 Dify answer 文本，也避免 Chatflow、后端、前端分别生成不同的判断过程文案。
 
@@ -195,14 +195,18 @@ interface DealDeskChatflowPayload {
 
 ```ts
 type DealDeskProcessEventType =
-  | 'task_identified'
+  | 'task_understanding'
+  | 'attachment_analysis'
+  | 'crm_retrieval'
+  | 'knowledge_retrieval'
+  | 'external_research'
+  | 'sales_analysis'
+  | 'finance_analysis'
+  | 'delivery_analysis'
+  | 'legal_analysis'
+  | 'analytics_analysis'
+  | 'answer_generation'
   | 'object_required'
-  | 'object_selected'
-  | 'context_loaded'
-  | 'memory_used'
-  | 'rule_checked'
-  | 'risk_found'
-  | 'suggestion_generated'
   | 'confirmation_required'
   | 'writeback_completed'
   | 'failed';
@@ -219,47 +223,37 @@ interface DealDeskProcessEventPayload {
 生成规则：
 
 - Dify SSE 节点状态是实时输入，不直接展示给用户。
-- 后端根据节点开始、完成、失败映射 `status`，根据当前 Chatflow 的显式节点标题映射 `type`。
-- 前端按 `type` 和 `status` 使用 13 号文档第 4 节的固定文案渲染；`text` 仅作为兼容字段，不作为最终展示口径。
+- 后端使用当前 YML 中稳定的 `node_id` 筛选关键节点，并根据节点开始、完成、失败映射 `type`、`status` 和固定业务文案。
+- 事件 `id` 必须使用 Dify `node_id`；前端按 `id` 更新同一节点，不按 `type` 压缩不同节点。
+- 前端按 `type` 和 `status` 使用 `docs/05` 第 4 节的固定文案渲染；`text` 作为跨层兼容字段。
 - `text` 不得出现 Agent、workflow、route、tool_call、Prompt、token、耗时等内部词。
-- 不再按 `quick_answer`、`text_analysis` 等回合类型二次压缩显示条数；显示多少条，只取决于本轮真实命中的标准事件。
+- 多个关键节点并行运行时必须同时保留多条 `running` 事件；显示多少条只取决于本轮真实命中的节点。
+- 不再按 `quick_answer`、`text_analysis` 等回合类型二次压缩显示条数。
 - 后端和前端都不再补业务兜底过程；没有真实 `processEvents` 时，页面不展示假的“已识别 / 已读取 / 已生成”步骤。
 - 如果有 `processEvents`，前端根据事件自动生成摘要条，不依赖 Chatflow 生成摘要。
 
-当前 Chatflow 的节点标题映射明细以后端 `AiDealDeskService` 的映射常量和 `AiDealDeskStreamingEventParsingTest` 为准。本文档只定义 `processEvents` 字段协议、标准事件类型和跨层职责，不再长期双维护一份节点标题表。
+当前 Chatflow 的 `node_id` 映射明细以 `docs/05`、后端 `AiDealDeskService` 和 `AiDealDeskStreamingEventParsingTest` 为共同基线。禁止退回节点标题或关键词模糊映射。
 
 补充说明：
 
-- `suggestion_generated` 的完成态只允许由最终输出节点触发；中间 `Agent` 节点结束时不回传完成态事件。
+- 多个领域分析节点各自映射为独立事件类型和事件 ID，不合并为一个 `suggestion_generated`。
 - `failed` 只在后端已跟踪节点失败时产生，避免把无关技术节点暴露给用户。
-- `risk_found` 仍保留在协议枚举中，但当前这版 Chatflow 没有单独映射它的用户节点，因此后端不会从任意 `Agent`、`LLM`、`answer` 节点自动推断它。
-- `object_required`、`object_selected`、`confirmation_required`、`writeback_completed` 由对象选择和写回业务阶段驱动，不由分析阶段节点标题直接映射。
-- 如果 Dify 中调整了节点标题，必须同步更新后端映射常量和对应测试；文档仅在业务语义或字段协议变化时更新。
+- `object_required`、`confirmation_required`、`writeback_completed` 由对象确认和写回业务阶段驱动，不由分析节点推断。
+- 旧事件类型只用于历史会话兼容，当前 V3 不再生成。
+- 如果 Dify 中调整了节点 ID，必须同步更新 `docs/05`、后端映射常量和对应测试。
 
 前端摘要生成建议：
 
 ```ts
 interface DealDeskProcessSummary {
-  text: string; // 例如：已完成 5 项检查：任务识别、商机资料、付款条件、风险判断、建议生成
+  text: string; // 例如：已完成 2 项，正在处理 4 项
   expandedByDefault: boolean; // 生成中 true，完成后 false
 }
 ```
 
 摘要词映射由前端维护，避免模型每次生成不同口径。
 
-| 事件类型 | 摘要词 |
-| --- | --- |
-| `task_identified` | 任务识别 |
-| `object_required` | 对象确认 |
-| `object_selected` | 对象确认 |
-| `context_loaded` | 资料读取 |
-| `memory_used` | 会话记忆 |
-| `rule_checked` | 条件核对 |
-| `risk_found` | 风险判断 |
-| `suggestion_generated` | 建议生成 |
-| `confirmation_required` | 等待确认 |
-| `writeback_completed` | 写入结果 |
-| `failed` | 异常处理 |
+摘要优先使用完成数、运行数和异常数，不再把所有步骤名称拼成超长文本。多个节点同时运行时使用“正在并行处理 N 项”；详细名称在展开区域展示。
 
 ## 8. 多结果 Markdown 协议
 
@@ -430,7 +424,7 @@ interface DealDeskWritebackPayload {
 - 普通问答不需要 Chatflow 自己返回轻量过程，过程事件由后端基于 SSE 映射补齐。
 - 后端保留 `processEvents` 作为前端唯一消费字段。
 - `process_events_json`、`candidate_objects_json`、`writeback_payload_json` 等重复字段只作为过渡兼容字段，后续应删除。
-- 当前这版 Chatflow 不需要为了判断过程再增加额外参数；节点标题变更时，同步更新后端映射常量和对应测试。
+- 当前这版 Chatflow 不需要为了判断过程再增加额外参数；节点 ID 变更时，同步更新 `docs/05`、后端映射常量和对应测试。
 - `task_type_gate`、`evidence_router`、`crm_read_gate`、`knowledge_gate`、`external_gate`、`gap_check_gate`、`agent_router` 都是内部流转语义，不得直接出现在用户可见正文里。
 
 ## 14. 降级与异常处理
@@ -452,7 +446,7 @@ interface DealDeskWritebackPayload {
 
 - 前端不从自然语言正文里解析对象候选或写入 payload。
 - 普通问答展示由后端 SSE 映射生成的轻量判断过程。
-- 业务任务判断过程全部符合 13 号文档。
+- 业务任务判断过程全部符合 `docs/05-多Agent智能助手 判断过程事件规范.md`。
 - 多结果通过 Markdown 文本澄清，用户输入完整名称后能继续连续对话。
 - 当前只读版显式写回类问法不会调用 CRM 写入；后续恢复写回时，写入确认不靠文本包含“确认”来判断状态。
 - Chatflow 不向用户输出内部路由、Agent 调试、工具调用或 JSON 代码块。
@@ -464,7 +458,7 @@ interface DealDeskWritebackPayload {
 建议按以下顺序推进：
 
 1. 前端使用真实对话 hook 和 adapter，不再以 mock provider 作为运行时兜底。
-2. 后端 SSE 映射继续跟随当前 Chatflow 节点标题，统一生成标准 `processEvents`。
+2. 后端 SSE 映射按当前 Chatflow 稳定节点 ID 统一生成标准 `processEvents`。
 3. 保持真实 Dify Chatflow API 接入，失败时返回失败态而不是 mock 成功。
 4. 验证 Planner、证据台账、CRM 读取、知识库检索、外部情报和按需 Agent 分支在典型问题下可达。
 5. 保留会话记忆、`@` 绑定、文件引用和历史写回确认兼容状态。
@@ -474,4 +468,4 @@ interface DealDeskWritebackPayload {
 
 `多Agent智能助手` 不应该让前端追着 Chatflow 的自然语言输出跑，也不应该让 Chatflow 把内部编排过程直接展示给用户。
 
-最稳的方案是：Chatflow 输出稳定业务 payload，后端基于 Dify SSE 统一生成标准过程事件，前端 adapter 按事件类型固定展示。判断过程的语义归 13 号文档统一管理，本协议负责保证它能稳定进入前端。
+最稳的方案是：Chatflow 输出稳定业务 payload，后端基于 Dify SSE 统一生成标准过程事件，前端 adapter 按事件类型固定展示。判断过程的语义归 `docs/05-多Agent智能助手 判断过程事件规范.md` 统一管理，本协议负责保证它能稳定进入前端。
