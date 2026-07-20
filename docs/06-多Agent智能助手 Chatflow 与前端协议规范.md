@@ -4,9 +4,9 @@
 | --- | --- |
 | 文档名称 | 多Agent智能助手 Chatflow 与前端协议规范 |
 | 所属系统 | CordysCRM / 多Agent智能助手 |
-| 文档版本 | v1.1 |
-| 更新时间 | 2026-07-16 |
-| 当前阶段 | V3 Stable Enhanced 只读 Chatflow / 前端协议收口 |
+| 文档版本 | v1.2 |
+| 更新时间 | 2026-07-18 |
+| 当前状态 | 已按当前前端、后端和 `AI Deal Desk - V3 Stable Enhanced.yml` 校准 |
 | 主要读者 | 前端、AI 应用开发、产品 |
 
 > [!NOTE]
@@ -14,16 +14,16 @@
 
 ## 1. 文档目的
 
-当前前端已经有 多Agent智能助手 工作台页面、真实对话 hook、判断过程和对话式写入确认。当前 Chatflow 以 `chatflows/ai-deal-desk-v3.example.yml` 为准，已经改为“Planner 任务规划、统一证据台账、按需多 Agent、统一协议适配”的只读链路；P0 不再依赖 mock provider 或候选对象卡片协议。
+当前前端已实现工作台、后端会话持久化、判断过程、流式回答和 Markdown 渲染。当前 Chatflow 以项目根目录的 `AI Deal Desk - V3 Stable Enhanced.yml` 为准，采用 Planner 任务规划、对象解析、统一证据台账、按需多 Agent 和长回答直接流式输出的只读链路。
 
-接下来接入真实 Chatflow 之前，必须先固定一份前后端协议，避免前端直接解析 Dify answer 文本，也避免 Chatflow、后端、前端分别生成不同的判断过程文案。
+本协议用于固定已运行的前后端边界，避免前端直接依赖 Dify 内部字段，也避免 Chatflow、后端和前端分别生成不同的判断过程文案。
 
 本文档解决四个问题：
 
 - 前端请求 Chatflow 时，应该传哪些上下文。
 - 后端返回前端时，必须给哪些结构化字段。
 - 前端 adapter 如何把 Chatflow 输出映射成页面回合。
-- 判断过程、多结果文本澄清、会话记忆、写入确认这些关键能力如何保持稳定。
+- 判断过程、多结果文本澄清、会话记忆和流式回答如何保持稳定。
 
 ## 2. 总体原则
 
@@ -39,7 +39,7 @@
 
 ## 3. 数据流
 
-P0 推荐数据流：
+现行数据流：
 
 ```text
 用户输入
@@ -70,14 +70,15 @@ CRM 查询工具不直接绑定 CordysCRM 原始页面接口。Dify Chatflow 通
 
 前端每次发送消息时，都应把用户原始输入和当前会话状态一起提交给 Chatflow。
 
-### 4.1 必传字段
+### 4.1 工作台请求字段
 
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
-| `query` | string | 用户本轮输入的原始文本 |
-| `conversationId` | string | 前端会话 ID，用于关联本地历史 |
-| `messageId` | string | 前端本轮用户消息 ID |
-| `userId` | string | 当前登录用户 ID |
+| `query` | string | 必填，用户本轮输入的原始文本 |
+| `conversationId` | string | 可选，Dify 会话 ID；新会话为空 |
+| `boundObject` | object | 可选，当前绑定客户或商机 |
+| `activeWriteback` | object | 兼容历史写回状态；当前 Chatflow 不使用 |
+| `files` | array | 可选，本轮上传文件引用 |
 
 ### 4.2 业务对象输入
 
@@ -109,7 +110,7 @@ CRM 查询工具不直接绑定 CordysCRM 原始页面接口。Dify Chatflow 通
 
 文件只作为本轮回答的补充材料，不改变本轮主对象归属。
 
-### 4.4 写入确认输入
+### 4.4 写回兼容输入
 
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
@@ -118,7 +119,7 @@ CRM 查询工具不直接绑定 CordysCRM 原始页面接口。Dify Chatflow 通
 | `active_writeback_type` | `follow_record` / `follow_plan` / `follow_record_and_plan` / empty | 待确认写入类型 |
 | `active_writeback_payload_json` | string | 上一轮待确认写入 payload，JSON 字符串 |
 
-用户回复 `确认`、`取消`、`修改` 或 `重试` 时，前端必须带上以上字段，让 Chatflow 能识别这是对上一轮写入草稿的操作。
+这些变量仍存在于 YML、后端 DTO 和前端类型中，用于兼容历史会话。当前 Chatflow 不生成新的写回确认，也不调用写入工具。
 
 ### 4.5 多结果澄清与连续对话输入
 
@@ -144,8 +145,6 @@ interface DealDeskChatflowPayload {
     | 'quick_answer'
     | 'object_select'
     | 'text_analysis'
-    | 'deep_deal_review_brief'
-    | 'stats_query'
     | 'writeback_confirm'
     | 'writeback_result'
     | 'fallback'
@@ -168,7 +167,7 @@ interface DealDeskChatflowPayload {
 | `answerText` | 必填，普通 Markdown 文本；多结果、失败说明和长文本分析都通过它承载 |
 | `processEvents` | 由后端基于 Dify SSE 节点状态统一映射生成；只有纯降级场景才允许为空 |
 | `objectSelect` | 废弃兼容字段；P0 不再消费 |
-| `writeback` | 仅写入确认或写入结果返回 |
+| `writeback` | 历史兼容字段；当前 Chatflow 不生成新的写回状态 |
 | `boundObject` | 当前回合明确绑定对象时返回 |
 | `suggestedSessionTitle` | 可选，用于前端更新历史会话标题 |
 | `warnings` | 可选，给前端记录降级原因，不直接展示为技术错误 |
@@ -178,16 +177,14 @@ interface DealDeskChatflowPayload {
 | `turnType` | 使用场景 | 前端展示 |
 | --- | --- | --- |
 | `quick_answer` | 普通规则问答、通用解释 | 用户问题 + Markdown 文本 + 轻量判断过程 |
-| `object_select` | Chatflow 原始对象澄清语义；用于客户/商机不唯一或对象查询类回答 | 不展示候选卡，按文本分析类降级展示 Markdown 候选列表 |
+| `object_select` | 客户/商机不唯一或缺少唯一对象 | 展示 Markdown 候选列表，不绑定任一候选 |
 | `text_analysis` | 商机总结、专项风险分析、多 Agent 评审 | 判断过程 + Markdown 文本结论 |
-| `deep_deal_review_brief` | Chatflow 原始复杂商机评审类型 | 页面按分析类展示，不额外暴露内部类型名 |
-| `stats_query` | Chatflow 原始经营统计、漏斗、收入或回款分析类型 | 页面按分析类展示，不额外暴露内部类型名 |
-| `writeback_confirm` | 用户明确要求写入 CRM，等待确认 | Markdown 文本展示待写入内容，等待用户回复 |
-| `writeback_result` | 用户确认、取消、重试后的写入结果 | Markdown 文本说明结果 |
+| `writeback_confirm` | 历史兼容类型 | 当前 Chatflow 不生成 |
+| `writeback_result` | 历史兼容类型 | 当前 Chatflow 不生成 |
 | `fallback` | 结构化字段解析失败但有可读文本 | 只展示 Markdown 文本 |
 | `failed` | 关键步骤失败，无法给出有效结论 | 展示失败原因和可继续操作建议 |
 
-当前 `chatflows/ai-deal-desk-v3.example.yml` 的 `protocol_adapter` 会保留一部分 DSL 原始业务类型：`object_select`、`deep_deal_review_brief`、`stats_query`。这些类型有助于后端记录任务语义，但不要求前端新增用户可见标签；后端适配层可以把它们归一到分析类回合体验。
+后端可从 Dify 节点输出恢复内部任务语义，但对前端只返回 `DealDeskTurnType` 中定义的类型。内部任务类型不作为页面标签展示。
 
 ## 7. 判断过程事件协议
 
@@ -238,7 +235,7 @@ interface DealDeskProcessEventPayload {
 
 - 多个领域分析节点各自映射为独立事件类型和事件 ID，不合并为一个 `suggestion_generated`。
 - `failed` 只在后端已跟踪节点失败时产生，避免把无关技术节点暴露给用户。
-- `object_required`、`confirmation_required`、`writeback_completed` 由对象确认和写回业务阶段驱动，不由分析节点推断。
+- `object_required` 由对象解析结果驱动。`confirmation_required` 和 `writeback_completed` 仅用于历史兼容，当前 YML 不生成。
 - 旧事件类型只用于历史会话兼容，当前 V3 不再生成。
 - 如果 Dify 中调整了节点 ID，必须同步更新 `docs/05`、后端映射常量和对应测试。
 
@@ -257,7 +254,7 @@ interface DealDeskProcessSummary {
 
 ## 8. 多结果 Markdown 协议
 
-当 Chatflow 判断用户提到客户或商机，但无法唯一确定对象时，当前 DSL 原始输出可能是 `turnType = object_select`，也可能由后端归一为 `text_analysis`。无论哪种情况，前端都只按普通 Markdown 渲染 `answerText`，不解析候选对象、不展示候选卡片、不触发 `selectCandidate` 续跑。
+当 Chatflow 判断用户提到客户或商机，但无法唯一确定对象时，返回 `turnType = object_select`。前端按普通 Markdown 渲染 `answerText`，不解析候选对象、不展示候选卡片、不触发 `selectCandidate` 续跑。
 
 推荐输出：
 
@@ -271,7 +268,7 @@ interface DealDeskProcessSummary {
 规则：
 
 - 候选必须来自 CRM Tool API 返回值，不允许前端或后端本地 mock。
-- 多结果回答只做澄清，不进入最终分析、不生成写回确认、不假装已绑定对象。
+- 多结果回答只做澄清，不进入最终分析，也不绑定任何候选。
 - 用户下一轮输入完整名称后，Chatflow 重新搜索；唯一命中后通过 `boundObject` 写入会话记忆。
 - 表格不是默认输出；只有列表、对比或行动计划确实更清晰时才使用。
 - 历史 `objectSelect` 字段只作为兼容字段保留，P0 前端不消费。
@@ -296,7 +293,7 @@ interface DealDeskBoundObjectPayload {
 - 用户消息中的 `@客户`、`@商机` chip 仍由前端本地展示。
 - 后续回合如果用户没有切换话题，可以继续带上该对象。
 
-## 10. 写入确认协议
+## 10. 写回兼容协议
 
 当前 V3 只读版不主动触发写入确认。用户明确提出保存、写入 CRM、生成跟进计划、保存为跟进记录时，Chatflow 只返回可复制草稿和说明；以下协议保留给后续恢复写回能力，或兼容历史前端状态。
 
@@ -338,14 +335,11 @@ interface DealDeskWritebackPayload {
 }
 ```
 
-展示规则：
+现行规则：
 
-- 当前 V3 只读版显式写回类问法应降级为 `text_analysis` 草稿回答，`writeback` 为空对象或缺省。
-- 后续恢复写回能力后，`awaiting_confirm` 时，`answerText` 必须用普通 Markdown 展示完整待写入内容。
-- 前端不渲染写入确认卡、编辑弹窗或成功失败 banner。
-- 用户回复 `确认` 后，前端带 `active_writeback_*` 字段请求 Chatflow。
-- 后续恢复写回能力后，Chatflow 返回 `writeback_result`，`writeback.status` 为 `confirmed`、`cancelled` 或 `failed`。
-- 写入失败时，`answerText` 说明失败原因和下一步，前端保留待确认 payload，允许用户回复 `重试` 或 `取消`。
+- 显式写回类问法按内容生成任务处理，返回 `text_analysis` 或普通回答，`writeback` 为空或缺省。
+- 前端保留相关类型与字段，只用于读取历史会话数据。
+- 后续启用真实写回时，必须同步更新 YML、后端权限与幂等校验、前端状态流和本协议。
 
 ## 11. Markdown 输出约束
 
@@ -358,34 +352,18 @@ interface DealDeskWritebackPayload {
 - 有序列表。
 - 加粗。
 - 简短小标题。
+- 表格。
+- 可验证的 Markdown 链接。
+- 受支持的图表代码块。
 
 不允许：
 
 - 把结构化 payload 放进代码块。
 - 输出 JSON 给用户看。
 - 输出“运行状态”“启用 Agent”“未启用 Agent”等内部信息。
-- 用代码块展示待写入 CRM 的内容。
 - 主动追加追问引导按钮文案。
 
-写入确认正文示例：
-
-```text
-即将写入商机跟进记录：
-
-客户：上海智联科技股份有限公司
-商机：智联云平台二期项目
-跟进方式：电话沟通
-负责人：张伟
-内容：本次评审判断付款方案整体风险偏高，下一步重点确认首付款比例、验收范围与一期上线范围。
-
-同时生成下一步跟进计划：
-
-计划时间：2026-06-23 10:00
-负责人：张伟
-内容：与客户确认首付款比例、验收范围与一期上线范围；同步评估交付资源与计划可行性。
-
-回复“确认”后写入 CRM；如果需要调整，直接告诉我你想改哪一部分。
-```
+前端始终保存累计 Markdown 原文并重新渲染。Dify 提供真实正文增量时直接展示；只返回整段正文时，前端按小段平滑追加，最终以完整正文校准。
 
 ## 12. Adapter 映射规则
 
@@ -398,21 +376,16 @@ interface DealDeskWritebackPayload {
 | `answerText` | `turn.text` | 直接作为 AI 回答正文 |
 | `processEvents` | `turn.process.events` | 标准事件类型、状态和展示顺序 |
 | `processEvents` | `turn.process.summary` | 前端按事件类型生成摘要 |
-| `objectSelect` | 不映射 | 废弃兼容字段，P0 前端不消费 |
+| `objectSelect` | 不映射 | 废弃兼容字段，前端不消费 |
 | `boundObject` | `session.boundObject` | 写入会话记忆 |
-| `writeback` | `session.activeWriteback` 或回合扩展字段 | 驱动确认状态 |
+| `writeback` | `session.activeWriteback` | 只恢复历史兼容状态 |
 | `turnType = failed` | `turn.status` / `turn.text` | 保留失败文本 |
 
-现有前端类型需要补齐：
-
-- `DealDeskProcessEvent` 增加 `type` 和 `failed` 状态。
-- `DealDeskSession` 增加当前活跃写入草稿状态。
-- `DealDeskAssistantReplyKind` 增加 `writeback-result` 或统一为 `writeback-result`。
-- 新增 `DealDeskChatflowPayload`、`DealDeskChatflowProvider`、`adaptChatflowPayloadToTurn`。
+上述前端类型和 adapter 已在 `types.ts`、`api.ts` 和 `dealDeskChatflowAdapter.ts` 中实现。
 
 ## 13. Chatflow 与后端输出改造要求
 
-当前以 `chatflows/ai-deal-desk-v3.example.yml` 为准，并按本协议收口：
+当前以项目根目录 `AI Deal Desk - V3 Stable Enhanced.yml` 为准：
 
 - Chatflow 不再生成用户可见的 `processEvents` 文案。
 - `process_events_json` 作为迁移字段保留时应返回空数组或仅用于兼容，不能作为主展示来源。
@@ -433,9 +406,7 @@ interface DealDeskWritebackPayload {
 | --- | --- |
 | Chatflow 无结构化 payload，但有 answer 文本 | 转为 `fallback`，只展示文本 |
 | payload JSON 解析失败 | 展示 answer 文本，记录解析错误 |
-| 历史 `turnType = object_select` | 当作 `text_analysis` 降级展示，记录兼容告警 |
-| 当前 `turnType = deep_deal_review_brief` | 按分析类回合展示，保留长文本评审正文 |
-| 当前 `turnType = stats_query` | 按分析类回合展示，保留统计分析正文 |
+| `turnType = object_select` | 展示 Markdown 候选列表，保持对象未绑定 |
 | `processEvents` 含内部词 | 前端按事件类型固定文案渲染；无法识别的事件过滤 |
 | 用户要求写入 CRM | 当前只读版生成可复制草稿，不调用 CRM 写入 |
 | 网络失败 | 保留用户消息，展示可重试文本 |
@@ -445,7 +416,7 @@ interface DealDeskWritebackPayload {
 协议落地后，需要满足：
 
 - 前端不从自然语言正文里解析对象候选或写入 payload。
-- 普通问答展示由后端 SSE 映射生成的轻量判断过程。
+- 判断过程只展示本轮实际经过的关键节点；普通问答没有可见业务节点时可以不展示。
 - 业务任务判断过程全部符合 `docs/05-多Agent智能助手 判断过程事件规范.md`。
 - 多结果通过 Markdown 文本澄清，用户输入完整名称后能继续连续对话。
 - 当前只读版显式写回类问法不会调用 CRM 写入；后续恢复写回时，写入确认不靠文本包含“确认”来判断状态。
@@ -453,16 +424,9 @@ interface DealDeskWritebackPayload {
 - Chatflow 不再生成用户可见判断过程文案。
 - 生产运行时不导入 mock provider；Dify 或后端失败时返回真实失败态。
 
-## 16. 下一步落地顺序
+## 16. 实现状态
 
-建议按以下顺序推进：
-
-1. 前端使用真实对话 hook 和 adapter，不再以 mock provider 作为运行时兜底。
-2. 后端 SSE 映射按当前 Chatflow 稳定节点 ID 统一生成标准 `processEvents`。
-3. 保持真实 Dify Chatflow API 接入，失败时返回失败态而不是 mock 成功。
-4. 验证 Planner、证据台账、CRM 读取、知识库检索、外部情报和按需 Agent 分支在典型问题下可达。
-5. 保留会话记忆、`@` 绑定、文件引用和历史写回确认兼容状态。
-6. 当前先完成只读部署演示；真实写回接口恢复应作为后续独立阶段处理。
+当前已完成真实对话 hook、后端 SSE 适配、稳定节点 ID 映射、并行过程展示、Dify Chatflow 接入、会话持久化、对象记忆、文件引用和长回答流式输出。写回字段仅作为历史兼容状态保留。
 
 ## 17. 最终结论
 

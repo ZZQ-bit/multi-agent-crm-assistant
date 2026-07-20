@@ -2,9 +2,9 @@
 
 ## 1. 文档目的
 
-本文档是 多Agent智能助手 阶段 3 的主产物，用于固定 CRM 工具能力、Dify 调用方式、数据协议、写回边界和阶段 4 的 Agent/Chatflow 输入。
+本文档定义当前 CRM 工具能力、Dify 调用方式、数据协议和写回边界。接口实现以 CordysCRM 后端 `AiDealDeskToolController`、`AiDealDeskDifyToolController` 和 `AiDealDeskToolService` 为准。
 
-阶段 3 的技术方案：
+现行技术方案：
 
 ```text
 Dify Chatflow
@@ -15,7 +15,7 @@ Dify Chatflow
 
 工具业务能力属于 CordysCRM 后端。Dify 只负责意图识别、参数抽取、工具调用编排和回答生成，不承载 CRM 权限、写回白名单、幂等和审计。
 
-当前项目已验证独立 MCP SSE 服务未作为可直接复用能力跑通，因此 P0 不依赖 MCP。后续可在工具 API 稳定后，再扩展为 OpenAPI Custom Tool 或 MCP 适配层。
+当前 Dify 通过自定义工具和 HTTP 节点调用匿名工具网关；运行链路不依赖 MCP。
 
 ## 2. 现有能力映射
 
@@ -33,20 +33,33 @@ Dify Chatflow
 | 新建跟进计划 | `POST /follow/plan/add` | 通过 `create_follow_plan` 受控写回复用 |
 | 更新商机字段 | `POST /opportunity/update` | P1 扩展，P0 不开放给 AI 写回 |
 
-## 3. P0 工具清单
+## 3. 工具清单
 
 多Agent智能助手 后端提供统一 Tool API：
 
 ```text
 POST /ai/deal-desk/tools/search-customers
 POST /ai/deal-desk/tools/search-opportunities
+POST /ai/deal-desk/tools/resolve-crm-object
 POST /ai/deal-desk/tools/get-customer-context
 POST /ai/deal-desk/tools/get-opportunity-context
 POST /ai/deal-desk/tools/create-follow-record
 POST /ai/deal-desk/tools/create-follow-plan
+POST /ai/deal-desk/tools/get-funnel-snapshot
+POST /ai/deal-desk/tools/get-customer-l2c-health
+POST /ai/deal-desk/tools/get-contract-revenue-snapshot
 ```
 
 同一组接口同步支持 `/front/ai/deal-desk/tools/*`，保持与现有 多Agent智能助手 对话入口一致。
+
+Dify 使用统一匿名网关：
+
+```text
+POST /anonymous/ai/deal-desk/dify-tools/{toolName}
+Header: X-DIFY-TOOL-TOKEN
+```
+
+当前 YML 的 Planner 只绑定 `resolve-crm-object`。客户或商机上下文由后续 CRM 数据读取节点调用；统计工具和写回工具虽由后端提供，但当前 YML 未调用写回工具。
 
 ## 4. 统一请求与返回
 
@@ -55,6 +68,7 @@ POST /ai/deal-desk/tools/create-follow-plan
 | 字段 | 说明 |
 | --- | --- |
 | `keyword` | 客户或商机搜索关键词 |
+| `objectReference` | CRM 对象解析使用的原始客户或商机名称 |
 | `customerId` | 已确认客户 ID |
 | `opportunityId` | 已确认商机 ID |
 | `contactId` | 可选联系人 ID |
@@ -95,6 +109,12 @@ POST /ai/deal-desk/tools/create-follow-plan
 | `DUPLICATE_WRITEBACK` | 重复写入请求 |
 
 ## 5. 查询工具协议
+
+### resolve_crm_object
+
+输入：`objectReference`、`limit`
+
+解析器同时搜索客户和商机。唯一精确匹配优先于其他模糊候选；只有一个同等级候选时返回唯一对象；存在多个同等级候选时返回 `OBJECT_AMBIGUOUS` 和真实候选列表。
 
 ### search_customers
 
@@ -147,7 +167,7 @@ POST /ai/deal-desk/tools/create-follow-plan
 
 ## 6. 标准上下文包
 
-`get_opportunity_context` 是阶段 4 多 Agent 使用的主要上下文工具。
+`get_opportunity_context` 是多 Agent 分析使用的主要商机上下文工具。
 
 输出结构：
 
@@ -177,16 +197,16 @@ POST /ai/deal-desk/tools/create-follow-plan
 | `missingFields` | 缺失的关键字段 |
 | `sourceRefs` | 数据来源引用，如 `customer:{id}`、`opportunity:{id}` |
 
-阶段 4 中，主 Agent 或上下文准备节点应优先调用上下文工具，再把标准上下文分发给专项 Agent。专项 Agent 不应各自重复查询 CRM。
+当前 YML 在对象唯一后由 CRM 数据读取节点调用上下文工具，再把标准上下文写入统一证据台账。专项 Agent 不各自重复查询 CRM。
 
-## 7. 写回工具协议
+## 7. 写回工具协议与当前边界
 
-P0 只开放两类写回：
+后端提供两类写回接口：
 
 - `create_follow_record`
 - `create_follow_plan`
 
-写回前必须满足：
+当前 YML 不调用这两个接口。后续启用时必须满足：
 
 - 用户明确表达保存、写入、生成跟进记录或创建跟进计划。
 - 当前客户或商机唯一。
@@ -220,37 +240,37 @@ P0 只开放两类写回：
 
 写回失败必须保留草稿，由前端允许用户重试、修改或取消，不能重复创建同一条记录或计划。
 
-## 8. Dify 调用建议
+## 8. Dify 调用规则
 
-P0 使用 Dify HTTP Request 节点调用 Tool API。
+当前 Chatflow 同时使用自定义工具和 HTTP Request 节点调用 Tool API。
 
 建议：
 
 - API Key 和 CRM 登录态由 CordysCRM 后端管理，不暴露给前端。
 - Dify 只传工具所需参数，不传完整 CRM 原始页面响应。
-- 写回工具只在用户确认后调用。
+- 当前版本不得调用写回工具。
 - HTTP Request 节点的错误结果必须进入可恢复分支。
 - 后续工具稳定后，可再补 OpenAPI Custom Tool 或 MCP 适配。
 
-## 9. 阶段 4 使用说明
+## 9. Chatflow 使用说明
 
-阶段 4 的 `docs/09-Agent 与 Chatflow 设计.md` 应基于本文档设计：
+`docs/09-Agent 与 Chatflow 设计.md` 基于本文档说明：
 
-- 主 Agent 如何判断是否需要 CRM 查询。
-- 主 Agent 如何处理 `OBJECT_AMBIGUOUS` 并生成 Markdown 文本澄清。
-- 上下文准备节点如何调用 `get_opportunity_context`。
+- Planner 如何判断是否需要 CRM 查询。
+- Planner 如何调用 `resolve_crm_object` 查证新对象。
+- CRM 数据读取节点如何调用上下文接口。
 - 专项 Agent 如何消费标准上下文包。
-- 写回确认节点如何生成草稿但不直接写入。
+- 内容生成任务如何生成草稿但不直接写入。
 
-阶段 4 不应重新定义 CRM 工具字段；如确实需要变更，应先更新本文档。
+Chatflow 不应重新定义 CRM 工具字段；如需变更，应同步更新后端 DTO、OpenAPI Schema、YML 和本文档。
 
-## 10. 阶段 3 验收
+## 10. 当前实现状态
 
-阶段 3 完成标准：
+当前实现满足：
 
 - 本文档成为 CRM 工具协议主依据。
 - CordysCRM 后端具备最小 AI Tool API 薄适配层。
 - Tool API 复用现有 CRM Service，不重写客户、商机、跟进业务逻辑。
 - 查询、多候选、上下文包、写回校验和幂等有测试覆盖。
-- Dify 调用方式明确为 HTTP Request 调 Tool API。
+- Dify 可通过自定义工具或 HTTP Request 调用 Tool API。
 - 写回执行权明确留在 CordysCRM 后端。

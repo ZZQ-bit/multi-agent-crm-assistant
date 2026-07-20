@@ -1,190 +1,149 @@
-<h1 align="center">多Agent智能助手</h1>
+# 多Agent智能助手
 
-<p align="center">
-  <strong>AI Deal Desk for CRM</strong><br>
-  嵌入 CRM 的多 Agent 商机协同工作台，帮助销售完成查询上下文、生成判断、输出建议与写回草稿的业务闭环。
-</p>
+`多Agent智能助手` 是嵌入 CordysCRM 的销售业务助手。系统围绕客户、商机、联系人、跟进记录和跟进计划等 CRM 对象，提供自然语言查询、进展总结、风险判断、内容草稿、跟进计划草稿和复杂商机评审能力。
 
-<p align="center">
-  <img src="https://img.shields.io/badge/Dify-Chatflow-1677ff?style=flat-square" alt="Dify Chatflow">
-  <img src="https://img.shields.io/badge/Multi--Agent-Deal%20Review-10b981?style=flat-square" alt="Multi Agent">
-  <img src="https://img.shields.io/badge/CRM-CordysCRM-f59e0b?style=flat-square" alt="CordysCRM">
-  <img src="https://img.shields.io/badge/Public%20Version-Secret%20Free-64748b?style=flat-square" alt="Secret Free">
-</p>
+CordysCRM 负责基础 CRM 业务对象与接口；多Agent智能助手负责理解用户任务，解析当前业务对象，按需读取 CRM、知识库、附件和公开资料，并组合销售、财务、交付、合同等 Agent 生成业务回答。
 
-本项目基于 CordysCRM 开源 CRM 底座扩展，围绕销售真实工作流完成“识别业务对象、查询上下文、生成判断与建议、输出可执行草稿”的只读演示闭环。当前公开版已包含独立 AI 工作台、会话持久化、对象记忆、流式回答、节点过程展示和多 Agent 商机评审，重点展示 AI 产品设计、Agent 编排、CRM 工具协议和前端交互联动。
+当前 Chatflow 不执行 CRM 写入。用户提出保存、创建跟进记录或创建跟进计划时，系统生成可复制草稿，不声称已经写入 CRM。折扣、付款、交付、合同和审批结论仍由对应业务负责人确认。
 
-## 目标工作台
+## 当前能力
 
-下图是面向作品集展示的目标工作台形态。当前公开版已经具备可运行工作台、Chatflow 模板、模拟数据和配套文档；图中的固定右侧业务栏与真实写回确认仍属于后续扩展方向。
-
-![AI Deal Desk 目标工作台](docs/assets/target-ai-deal-desk-workbench.png)
-
-## 项目亮点
-
-| 亮点 | 说明 |
+| 能力 | 当前实现 |
 | --- | --- |
-| CRM 内嵌体验 | AI 入口放在 CRM 工作流内，围绕客户、商机、联系人、跟进记录和计划等真实业务对象展开。 |
-| 多 Agent 商机评审 | 将复杂商机拆成销售、财务、交付、合同等视角，再汇总成风险、结论和下一步动作建议。 |
-| 证据驱动回答 | CRM 数据、知识库规则、附件摘要和外部情报按需进入判断链路，减少纯 Prompt 式空泛回答。 |
-| 按需能力编排 | 根据任务动态启用 CRM、知识库、外部情报或专项 Agent，简单问题跳过非必要链路，减少无效调用和过度分析。 |
-| 对象解析与上下文记忆 | Planner 可通过 CRM Resolver 校验客户或商机，并在连续对话中复用当前对象、切换对象和历史消息。 |
-| 流式回答与过程可见 | 后端透传 Dify SSE，前端增量渲染最终回答，并将串行或并行节点事件映射为可展开的判断过程。 |
-| 可核验公开来源 | 联网结果保留网页标题和原始链接，最终回答可生成行内引用及完整来源列表。 |
-| 公开版可复用 | GitHub 版本已脱敏，不包含个人 API Key、真实域名和个人简历，便于导入、学习和二次改造。 |
+| CRM 对象解析 | Planner 通过 `resolve_crm_object` 校验客户或商机；精确匹配优先，同等级多候选时要求用户确认。 |
+| 客户与商机查询 | 读取客户、商机、联系人、跟进记录、跟进计划和统计数据，并以业务文本或表格返回。 |
+| 连续对话 | 后端持久化会话和消息；前端保存当前业务对象；Planner 使用有限历史消息理解连续追问。 |
+| 专项风险判断 | 根据问题按需启用销售、财务、交付或合同 Agent，不要求所有问题都进入完整评审。 |
+| 多 Agent 商机评审 | 对复杂商机并行执行销售、财务、交付和合同分析，再统一生成结论、主要风险和下一步建议。 |
+| 知识库检索 | Planner 根据任务语义决定是否读取内部业务规则，并结合 CRM 事实生成检索内容。 |
+| 外部公开资料 | 用户任务需要公开信息时启用外部情报 Agent；回答保留可验证网页标题和原始链接。 |
+| 图片与附件 | 图片或截图先生成附件摘要，再作为本轮业务判断证据。 |
+| 流式回答 | 后端转发 Dify SSE；长文本回答直接进入回答节点；前端按累计 Markdown 内容增量渲染。 |
+| 判断过程 | 前端根据 Dify 关键节点事件展示任务理解、资料读取、专项分析和回答生成状态；并行节点分别显示。 |
+| Markdown 与图表 | 支持标题、列表、表格、代码块、链接、复制操作和 `chart` 代码块图表。 |
+| 内容与计划草稿 | 生成沟通内容、跟进摘要和跟进计划草稿；当前版本不执行 CRM 写入。 |
 
-## 🔥 功能介绍
+## 页面结构
 
-- **支持 CRM 业务对象识别**：Planner Agent 可调用 `resolve_crm_object` 校验客户或商机，处理同名候选、客户与商机歧义及对话中的对象切换。
-- **支持独立工作台与历史会话**：一级菜单进入 AI Deal Desk，右侧历史会话按日期分组，刷新后仍可恢复消息和当前业务对象。
-- **支持真实流式输出**：后端透传 Dify SSE，前端按增量事件渲染文本，而不是等工作流结束后模拟逐字显示。
-- **支持判断过程展示**：根据 Dify 节点事件实时展示已完成、运行中和并行处理状态，同时保留失败时的轻量降级映射。
-- **支持文件上传**：支持上传图片或截图作为本轮对话证据，Chatflow 会将附件摘要纳入业务判断上下文。
-- **支持前端 Markdown 渲染**：AI 回答支持标题、列表、表格、代码块、重点加粗、可点击来源链接和复制交互。
-- **支持可视化图表输出**：经营分析类回答可通过 Markdown `chart` 代码块输出图表数据，由前端渲染为可视化图表。
-- **支持多 Agent 商机评审**：复杂商机可按销售、财务、交付、合同 4 个视角分别分析，再统一汇总结论、风险和下一步建议。
-- **支持知识库规则检索**：Planner 语义判断是否检索，并结合 CRM 事实整理检索词；折扣付款、交付范围、合同验收、销售推进等规则可作为判断证据。
-- **支持外部情报补充**：当问题需要公开资料佐证时按需联网，保留网页标题、原始链接和证据边界。
-- **支持数据写入草稿**：当前公开版默认不直接写入 CRM；当用户提出保存、写入或创建跟进计划时，会生成可复制的跟进记录/计划草稿，并保留后续接入真实写回的协议边界。
-- **支持连续追问与对象切换**：短追问可复用当前客户或商机；用户显式提到其他对象时，Planner 会重新解析并切换上下文。
+当前页面采用双栏工作台：
+
+- 左侧为历史会话、新建会话和会话时间。
+- 中间为对话、当前对象、判断过程、Markdown 回答、附件和输入区。
+- 客户或商机不唯一时，在对话中返回候选列表并要求用户输入完整名称。
+- 当前版本不设置固定右侧业务栏。
 
 ## 效果预览
 
-以下截图基于演示数据，用于展示 CRM 内嵌式 AI 工作台的核心交互效果。
+以下截图使用演示数据，展示当前工作台的主要输出形态。
 
 <table>
   <tr>
     <td width="50%">
       <strong>CRM 查询与连续追问</strong><br>
-      <sub>通过自然语言查询客户/商机；对象不唯一时用候选列表澄清，后续追问可复用当前会话上下文。</sub><br><br>
+      <sub>查询客户或商机；对象不唯一时进行澄清；后续追问复用当前会话对象。</sub><br><br>
       <img src="docs/assets/demo-crm-query-followup.png" alt="CRM 查询与连续追问" width="100%">
     </td>
     <td width="50%">
-      <strong>可视化图表输出</strong><br>
-      <sub>经营分析类问题可输出漏斗图、柱状图等可视化结果，帮助快速识别重点阶段和转化瓶颈。</sub><br><br>
-      <img src="docs/assets/demo-chart-output.png" alt="可视化图表输出" width="100%">
+      <strong>经营分析与图表</strong><br>
+      <sub>基于 CRM 统计数据生成业务结论，并在存在有效对比数据时渲染图表。</sub><br><br>
+      <img src="docs/assets/demo-chart-output.png" alt="经营分析与图表" width="100%">
     </td>
   </tr>
   <tr>
     <td width="50%">
-      <strong>外部情报与 CRM 证据结合</strong><br>
-      <sub>外部公开资料作为辅助证据进入判断链路，并与 CRM 内部事实区分展示。</sub><br><br>
-      <img src="docs/assets/demo-external-intel.png" alt="外部情报与 CRM 证据结合" width="100%">
+      <strong>外部资料与 CRM 证据</strong><br>
+      <sub>公开资料作为辅助证据，与 CRM 内部事实和模型判断区分表达。</sub><br><br>
+      <img src="docs/assets/demo-external-intel.png" alt="外部资料与 CRM 证据" width="100%">
     </td>
     <td width="50%">
-      <strong>复杂商机多 Agent 评审</strong><br>
-      <sub>围绕销售、财务、交付、合同等视角进行专项判断，汇总成结论、风险边界和下一步建议。</sub><br><br>
-      <img src="docs/assets/demo-multi-agent-review.png" alt="复杂商机多 Agent 评审" width="100%">
+      <strong>复杂商机评审</strong><br>
+      <sub>销售、财务、交付和合同 Agent 分别判断，再统一生成综合结论。</sub><br><br>
+      <img src="docs/assets/demo-multi-agent-review.png" alt="复杂商机评审" width="100%">
     </td>
   </tr>
 </table>
 
-## 协作架构
+## 系统结构
 
-![AI Deal Desk 多智能体协作架构](docs/assets/ai-deal-desk-agent-architecture.png)
+![多Agent智能助手协作结构](docs/assets/ai-deal-desk-agent-architecture.png)
 
-## Chatflow 流程
-
-实线表示稳定主流程，虚线表示按需触发的证据收集或专业 Agent 调度。
-当前 Chatflow 由 54 个节点、75 条边组成，通过对象解析、任务规划、证据调度和 Agent Router 按需启用不同能力；简单问题可跳过知识检索、外部情报或专项 Agent 等非必要链路。
+当前公开 Chatflow 包含 54 个节点和 75 条边。节点按实际任务选择执行，并非每轮都会运行全部分支。
 
 ```mermaid
 flowchart TD
-  A["用户输入"] --> B["附件图片判断"]
-  B --> C{"是否有图片"}
-  C -. 有图片 .-> D["图片 / 截图识别"]
-  C --> E["附件摘要汇合"]
-  D --> E
-  E --> F["附件上下文整理"]
-  F --> G["输入解析"]
-  G --> H["上下文整理"]
-  H --> I["任务预检"]
-  I --> J["Planner Agent + CRM Resolver"]
-  J --> JA["任务计划标准化"]
-  JA --> K{"任务类型路由"}
+  A["用户输入、当前对象和附件"] --> B["输入与附件整理"]
+  B --> C["Planner 任务理解与对象解析"]
+  C --> D{"任务路由"}
 
-  K -. 普通问答 .-> L["轻量回答"]
-  K -. 图片问答 .-> M["图片直接回答"]
-  K -->|"业务任务"| N["证据收集调度"]
+  D -->|"普通问题"| E["轻量回答"]
+  D -->|"图片问题"| F["图片回答"]
+  D -->|"CRM 或业务任务"| G["证据收集调度"]
 
-  N -. 需要CRM .-> O["CRM 数据读取"]
-  N -. 需要知识库 .-> P["基于 CRM 事实整理检索词"]
-  P --> PA["知识库检索"]
-  N -. 需要外部情报 .-> Q["外部情报补充"]
-  N -. 有附件证据 .-> R["附件证据整理"]
+  G --> H["CRM 数据"]
+  G -.-> I["知识库规则"]
+  G -.-> J["外部公开资料"]
+  G -.-> K["附件证据"]
 
-  O --> S["证据汇总"]
-  PA --> S
+  H --> L["证据汇总与完整度判断"]
+  I --> L
+  J --> L
+  K --> L
+
+  L --> M{"业务 Agent 路由"}
+  M -.-> N["销售 Agent"]
+  M -.-> O["财务 Agent"]
+  M -.-> P["交付 Agent"]
+  M -.-> Q["合同 Agent"]
+  M -.-> R["经营分析 Agent"]
+
+  N --> S["领域结论汇总"]
+  O --> S
+  P --> S
   Q --> S
   R --> S
+  S --> T["业务回答生成"]
 
-  S --> T["证据缺口判断"]
-  T --> U{"证据是否足够"}
-  U -. 需要补充 .-> V["补充信息提示"]
-  U -->|"足够"| W{"业务 Agent 路由"}
-
-  W -. 销售问题 .-> X["销售 Agent"]
-  W -. 财务问题 .-> Y["财务 Agent"]
-  W -. 交付问题 .-> Z["交付 Agent"]
-  W -. 合同问题 .-> AA["合同 Agent"]
-  W -. 经营分析 .-> AB["经营分析 Agent"]
-  W -. 无需专项Agent .-> AC["跳过专项 Agent"]
-
-  X -.-> AD["专项结论汇合"]
-  Y -.-> AD
-  Z -.-> AD
-  AA -.-> AD
-  AB -.-> AD
-  AC -.-> AD
-
-  AD --> AE["业务回答生成"]
-  L --> AF["输出适配"]
-  M --> AF
-  V --> AF
-  AE --> AF
-  AF --> AG["返回 CRM 工作台"]
-
-  J -. 节点事件 .-> AH["前端判断过程"]
-  AE -. answer delta .-> AG
+  E --> U["Dify Answer / 输出适配"]
+  F --> U
+  T --> U
+  U --> V["CRM 工作台"]
 ```
-
-## 核心能力
-
-- 客户与商机查询：在 CRM 对话入口中选择客户、商机，读取客户画像、联系人、跟进记录、计划和商机阶段。
-- 商机进展总结：基于 CRM 已有记录生成当前进展、风险点和下一步建议。
-- 沟通内容生成：生成面向客户的邮件、微信、跟进话术等草稿。
-- 跟进计划生成：给出下一步动作、负责人、时间建议，并生成可复制草稿；真实写回作为后续阶段能力。
-- 复杂商机评审：从销售、财务、交付、合同 4 个视角进行多 Agent 分析，汇总结论、风险和行动建议。
-- 外部公开信息查询：按需联网，区分 CRM 事实、公开资料与模型推断，并回显可点击来源。
-- 经营分析与图表：基于 CRM 聚合数据输出可读结论，并在有真实对比数据时生成图表。
 
 ## 目录结构
 
 ```text
-CordysCRM/        CRM 前后端源码与 AI Deal Desk 扩展
-chatflows/        Dify Chatflow 模板，已脱敏
-demo-data/        演示数据 SQL
-docs/             PRD、协议、Agent/Chatflow 设计、验收文档
-knowledge-base/   AI Deal Desk 业务规则知识库
-scripts/          本地启动、数据导入、冒烟测试脚本
-tests/            Chatflow 与接口测试脚本
+CordysCRM/        CordysCRM 前后端源码及多Agent智能助手扩展
+chatflows/        可导入 Dify 的公开 Chatflow 模板
+demo-data/        演示数据和初始化 SQL
+docs/             产品、协议、Chatflow、验收和安全文档
+knowledge-base/   业务规则知识库源文件
+scripts/          本地启动、数据导入和结构检查脚本
+tests/            Chatflow、接口和回复质量测试脚本
 ```
 
 ## Chatflow 配置
 
-`chatflows/ai-deal-desk-v3.example.yml` 是公开模板，不包含个人 API Key。导入 Dify 后需要自行配置：
+公开模板位于：
 
-- 模型供应商 API Key
-- `CRM_TOOL_BASE_URL`
-- `DIFY_TOOL_TOKEN`
-- 知识库数据集、Embedding 与 Rerank 模型
-- `docs/reference/dify/AI Deal Desk CRM Resolver.openapi.yml` 对应的自定义工具，并将 `resolve_crm_object` 绑定给 Planner Agent
+```text
+chatflows/ai-deal-desk-v3.example.yml
+```
 
-本地调试 Dify Cloud 时，`CRM_TOOL_BASE_URL` 需要是可公网访问的 HTTPS 地址，例如自己的 ngrok、cloudflared 或云服务器域名。
+模板不包含个人 API Key。导入 Dify 后需要完成以下配置：
+
+1. 配置模型供应商和模型凭据。
+2. 创建并绑定知识库，配置 Embedding、Rerank、Top K 等检索参数。
+3. 使用 `docs/reference/dify/AI Deal Desk CRM Resolver.openapi.yml` 创建 CRM 对象解析工具。
+4. 将 `resolve_crm_object` 绑定到 Planner Agent。
+5. 配置 CRM Tool API 地址和 `DIFY_TOOL_TOKEN`。
+6. 检查外部情报 Agent 使用的联网搜索工具。
+7. 发布 Chatflow 后，将 App API 地址和 Key 配置到 CordysCRM 后端。
+
+Dify Cloud 无法访问本机 `localhost`。本地联调时，CRM Tool API 必须通过可公网访问的 HTTPS 地址提供，例如自有反向代理、ngrok、cloudflared 或部署环境域名。
 
 ## 本地启动
 
-在 Windows 环境下，可参考：
+Windows 环境执行：
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts\start-local-deal-desk.ps1
@@ -197,28 +156,54 @@ http://localhost:8081/#/login
 http://localhost:8081/#/ai-deal-desk/index
 ```
 
-演示账号和数据库初始化方式请参考 `docs/11-本地启动与联调经验.md` 与 `demo-data/`。
+停止本地服务：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\stop-local-deal-desk.ps1
+```
+
+数据库初始化、演示账号和 Dify 联调说明见 [本地启动与联调经验](docs/11-本地启动与联调经验.md)。
 
 ## 验证
 
-仓库提供了 Chatflow 结构检查、Python 节点冒烟测试、前端事件适配测试和后端单元测试。导入或修改 Chatflow 后，可先运行：
+修改或重新导出 Chatflow 后，可执行以下结构检查：
 
 ```powershell
-python tests\ai-deal-desk\validate-v3-chatflow.py
 node scripts\ai-deal-desk-v3-readonly-topology.smoke-test.mjs
 node scripts\ai-deal-desk-v3-python-codeblocks.smoke-test.mjs
 node scripts\ai-deal-desk-v3-stats.smoke-test.mjs
 ```
 
-## 安全说明
+测试范围、执行结果和已知问题分别记录在：
 
-本仓库只保留演示代码、模板配置、模拟数据和项目文档。真实部署时请不要把以下内容提交到 GitHub：
+- [验收方案与用例集](docs/13-多Agent智能助手%20验收方案与用例集.md)
+- [测试执行与质量报告](docs/14-多Agent智能助手%20测试执行与质量报告.md)
+- [安全权限与边界说明](docs/15-多Agent智能助手%20安全权限与边界说明.md)
+- [阶段验收结论](docs/16-多Agent智能助手%20阶段验收结论.md)
+- [测试问题与完整回复记录](docs/17-多Agent智能助手%20测试问题与完整回复记录.md)
 
-- `.env`、真实 API Key、Dify App Key、模型供应商 Key
-- 真实服务器域名、个人 ngrok 域名、真实数据库密码
-- MySQL/Redis 运行时数据目录
-- 日志、构建产物、个人简历和本地临时文件
+## 文档
 
-## 项目定位
+[文档索引](docs/00-文档索引.md) 是当前文档入口。主要文档如下：
 
-这个项目重点展示 AI 产品设计与工程闭环能力，而不是重做 CRM 基础业务。CordysCRM 作为业务对象底座，多Agent智能助手负责在 CRM 内完成对象识别、上下文读取、多角色判断、建议生成和草稿输出。AI 只提供内部判断与草稿，涉及折扣、付款、交付、合同或真实 CRM 写回时，仍由相应业务负责人确认。
+| 文档 | 内容 |
+| --- | --- |
+| [PRD](docs/01-多Agent智能助手%20PRD.md) | 产品定位、用户、能力范围、交互原则和验收要求 |
+| [知识库与业务规则设计](docs/02-知识库与业务规则设计.md) | 知识库内容、索引、检索配置和规则边界 |
+| [页面与输出实现规范](docs/03-多Agent智能助手%20页面与输出实现规范.md) | 双栏工作台、对话、Markdown、附件和输出要求 |
+| [Chatflow 与前端协议规范](docs/06-多Agent智能助手%20Chatflow%20与前端协议规范.md) | 前端、后端适配层和 Chatflow 的字段与事件协议 |
+| [CRM 工具能力与数据协议](docs/08-CRM%20工具能力与数据协议.md) | CRM 查询、对象解析、统计和写入接口边界 |
+| [Agent 与 Chatflow 设计](docs/09-Agent%20与%20Chatflow%20设计.md) | Agent 职责、路由策略、证据链和节点设计 |
+| [实施路线与验收清单](docs/10-实施路线与验收清单.md) | 当前实现状态和发布验收条件 |
+| [前端展示协议](docs/12-多Agent智能助手%20前端展示协议.md) | 流式回答、判断过程、Markdown 和前端适配规则 |
+
+## 安全与边界
+
+- 不提交 `.env`、真实 API Key、Dify App Key、模型供应商 Key 或数据库密码。
+- 不在公开模板中保留个人域名、固定隧道地址或生产系统地址。
+- 不提交 MySQL、Redis 运行数据、日志、构建产物和本地缓存。
+- 自定义 Tool API 必须使用独立令牌，并限制允许调用的操作。
+- 当前 Chatflow 只读取 CRM 数据并生成草稿，不执行写入。
+- AI 输出是内部分析与草稿，不替代财务、交付、合同或管理审批。
+
+完整边界见 [安全权限与边界说明](docs/15-多Agent智能助手%20安全权限与边界说明.md)。

@@ -68,7 +68,7 @@ type DealDeskProcessEventType =
 
 ## 4. 当前 V3 关键节点映射
 
-映射基线为根目录 `chatflows/ai-deal-desk-v3.example.yml`。
+映射基线为根目录 `AI Deal Desk - V3 Stable Enhanced.yml`。
 
 | Dify `node_id` | 标准事件类型 | 运行态文案 | 完成态文案 | 顺序 |
 | --- | --- | --- | --- | ---: |

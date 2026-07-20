@@ -2,9 +2,9 @@
 
 ## 1. 文档目的
 
-本文档是 多Agent智能助手 阶段 4 的主设计文档，用于固定 Planner 路由、多 Agent 分工、Dify Chatflow 编排、CRM Tool API 只读调用链路、多结果文本澄清、会话记忆和最终输出协议边界。
+本文档说明当前 Planner 路由、多 Agent 分工、Dify Chatflow 编排、CRM Tool API 只读调用链路、多结果文本澄清、会话记忆和最终输出协议边界。
 
-阶段 4 的目标不是重新设计 CordysCRM，也不是重开阶段 3 的 Tool API 合同，而是让当前 `chatflows/ai-deal-desk-v3.example.yml` 成为只读型 CRM 多智能体工作台：
+当前实现以项目根目录 `AI Deal Desk - V3 Stable Enhanced.yml` 为准：
 
 ```text
 用户自由提问
@@ -15,7 +15,7 @@
   -> 输出 DealDeskChatflowPayload
 ```
 
-阶段 4 只负责 Dify Chatflow 设计和改造边界。当前 V3 暂不做 CRM 写回；输出协议中的 `writeback` 字段保留为空对象 `{}`，用于兼容前端协议。
+当前 V3 不做 CRM 写回；输出协议中的 `writeback` 字段仅用于兼容前端和历史会话。
 
 ## 2. 设计原则
 
@@ -29,7 +29,7 @@
 
 ## 2.1 V3 Stable Enhanced 当前主流程
 
-当前 Chatflow 以 `chatflows/ai-deal-desk-v3.example.yml` 为准。它已经从旧版 `route_gate -> 各任务分支 -> 各自 answer` 的结构，改为“统一 Planner、统一证据台账、统一业务回答、统一协议适配”的链路。
+当前 Chatflow 以项目根目录 `AI Deal Desk - V3 Stable Enhanced.yml` 为准，共 54 个节点、75 条边。它采用统一 Planner、CRM 对象解析、统一证据台账、按需 Agent 和长回答直接流式输出。
 
 稳定主干是：
 
@@ -39,6 +39,7 @@
   -> 输入解析
   -> 上下文整理
   -> Planner 任务理解与规划
+  -> 需要新对象时调用 CRM 对象解析工具
   -> 任务计划标准化
   -> 任务类型路由
   -> 证据收集调度
@@ -46,72 +47,46 @@
   -> 证据完整度判断
   -> 业务 Agent 路由
   -> 专项结论汇合
-  -> CRM 业务回答整合
-  -> 输出协议适配
-  -> 返回 CRM 工作台
+  -> 简单 CRM 查询由代码节点生成短回答
+  -> 分析类任务由 CRM 业务回答生成节点成文
+  -> 长回答直接进入流式回答节点
+  -> 代码短回答经输出协议适配后返回工作台
 ```
 
 当前流转关系如下。实线表示稳定主流程，虚线表示条件触发或按需执行：
 
 ```mermaid
 flowchart TD
-  A[用户输入] --> B[附件图片判断]
-  B --> C{是否有图片}
-  C -.有图片.-> D[图片/截图识别]
-  C --> E[附件摘要汇合]
-  D --> E
-  E --> F[附件上下文整理]
-  F --> G[输入解析]
-  G --> H[上下文整理]
-  H --> I[Planner 任务理解与规划]
-  I --> J[任务计划标准化]
-  J --> K{任务类型路由}
-
-  K -.普通闲聊/兜底.-> L[轻量回答]
-  K -.图片问答.-> M[图片直接回答]
-  K -->|业务任务| N[证据收集调度]
-
-  N -.需要 CRM.-> O[CRM 数据读取]
-  N -.需要知识库.-> P[知识库检索]
-  N -.需要外部情报.-> Q[外部情报 Agent]
-  N -.有附件证据.-> R[附件证据整理]
-
-  O --> S[证据汇总]
-  P --> S
+  A[用户输入与附件] --> B[Planner 任务理解与规划]
+  B -.新对象名称.-> C[CRM 对象解析]
+  C --> B
+  B --> D[任务计划标准化与任务路由]
+  D -.普通问答.-> E[轻量回答]
+  D -.图片问答.-> F[图片直接回答]
+  D -->|业务任务| G[证据收集调度]
+  G -.需要 CRM.-> H[CRM 数据读取]
+  G -.需要知识库.-> I[知识库检索]
+  G -.明确要求公开信息.-> J[外部情报 Agent]
+  G -.有附件.-> K[附件证据整理]
+  H --> L[统一证据台账]
+  I --> L
+  J --> L
+  K --> L
+  L --> M[证据完整度判断]
+  M -.需要补充.-> N[缺口回答]
+  M -->|可回答| O[业务 Agent 路由]
+  O -.按需或完整评审.-> P[销售/财务/交付/合同 Agent]
+  O -.经营分析.-> Q[经营分析 Agent]
+  O -.CRM 事实查询.-> R[CRM 轻量读取回答]
+  P --> S[领域结论汇合]
   Q --> S
-  R --> S
-
-  S --> T[证据缺口判断]
-  T --> U{是否可回答}
-  U -.需要补充信息.-> V[缺口回答]
-  U -->|可回答| W{业务 Agent 路由}
-
-  W -.复杂商机评审.-> X[销售协同 Agent]
-  W -.复杂商机评审.-> Y[财务判断 Agent]
-  W -.复杂商机评审.-> Z[交付判断 Agent]
-  W -.复杂商机评审.-> AA[合同判断 Agent]
-  W -.销售问题.-> X
-  W -.财务问题.-> Y
-  W -.交付问题.-> Z
-  W -.合同问题.-> AA
-  W -.经营分析.-> AB[经营分析 Agent]
-  W -.CRM 轻量读取.-> AC[CRM 轻量读取回答]
-  W -.无需专项 Agent.-> AD[跳过专项 Agent]
-
-  X -.-> AE[专项结论汇合]
-  Y -.-> AE
-  Z -.-> AE
-  AA -.-> AE
-  AB -.-> AE
-  AD -.-> AE
-
-  AE --> AF[CRM 业务回答整合]
-  L --> AG[输出协议适配]
-  M --> AG
-  V --> AG
-  AC --> AG
-  AF --> AG
-  AG --> AH[返回 CRM 工作台]
+  S --> T[CRM 业务回答生成]
+  E --> U[直接流式回答]
+  F --> U
+  T --> U
+  N --> V[输出协议适配]
+  R --> V
+  V --> W[代码短回答输出]
 ```
 
 外部情报、知识库、图片/附件和 CRM 工具都是证据来源；销售、财务、交付、合同、经营分析 Agent 是按需运行的领域判断角色。最终输出仍保持前端协议字段：
@@ -120,7 +95,7 @@ flowchart TD
 protocolVersion / turnType / answerText / processEvents / writeback / boundObject
 ```
 
-其中 `writeback` 保留为空对象用于兼容前端协议，当前不调用 CRM 写入接口。
+其中 `writeback` 用于兼容前端协议和历史会话，当前不调用 CRM 写入接口。长回答直接流式输出；短回答由协议适配节点封装后输出。
 
 ## 3. 主 Agent 路由策略
 
@@ -139,8 +114,8 @@ protocolVersion / turnType / answerText / processEvents / writeback / boundObjec
 
 1. 如果是图片直答问题，优先基于图片/附件摘要回答。
 2. 如果是泛销售管理、多Agent智能助手 概念解释或非 CRM 问题，走轻量回答。
-3. 如果本轮或历史会话已经有唯一对象，优先使用当前会话记忆中的对象继续回答。
-4. 如果问题需要 CRM 数据但对象未确认，先调用搜索工具确认客户或商机。
+3. 如果本轮或历史会话已经有唯一对象，且用户没有明确切换对象，优先使用当前会话记忆中的对象继续回答。
+4. 用户明确提到新对象名称时，Planner 调用唯一的 `resolve_crm_object` 工具，同时查证客户和商机；精确匹配优先，同等级多候选必须澄清。
 5. 如果用户要求保存、写入、记一条跟进，当前只生成可复制草稿，不执行 CRM 写入。
 6. 如果问题只涉及单一专项视角，进入对应专项 Agent。
 7. 如果用户明确要求评审，或问题同时涉及销售、财务、交付、合同中多个视角，进入多 Agent 评审。
@@ -151,27 +126,28 @@ protocolVersion / turnType / answerText / processEvents / writeback / boundObjec
 | --- | --- | --- | --- |
 | 多Agent智能助手 概念、泛销售问题 | `general_chat` | 轻量回答 | 不查 CRM，不启用专项 Agent | `quick_answer` |
 | 图片/截图内容问答 | `image_answer` | 图片直接回答 | 只基于附件摘要回答 | `quick_answer` |
-| 查客户、查商机、列商机 | `object_query` | CRM 轻量读取 | 调 CRM；不启用专项 Agent | `object_select`，后端/前端按文本分析降级展示 |
+| 查客户、查商机、列商机 | `object_query` | CRM 轻量读取 | 调 CRM；不启用专项 Agent | 唯一对象为 `quick_answer`，多候选为 `object_select` |
 | 总结客户或商机进展 | `progress_summary` | 业务 Agent 路由 | 调 CRM；启用销售协同 Agent | `text_analysis` |
 | 生成话术、跟进摘要 | `sales_assist` / `content_draft` | 业务 Agent 路由 | 视对象调 CRM；启用销售协同 Agent | `text_analysis` |
 | 生成跟进计划草稿 | `followup_plan` | 业务 Agent 路由 | 视对象调 CRM；启用销售协同 Agent | `text_analysis` |
 | 付款、折扣、账期、回款 | `finance_check` | 业务 Agent 路由 | 调 CRM 和知识库；启用财务判断 Agent | `text_analysis` |
 | 上线周期、定制范围、资源、验收 | `delivery_check` | 业务 Agent 路由 | 调 CRM 和知识库；启用交付判断 Agent | `text_analysis` |
 | 合同条款、验收、赔付、责任边界 | `legal_check` | 业务 Agent 路由 | 调 CRM 和知识库；启用合同判断 Agent | `text_analysis` |
-| 折扣、付款、交付、合同都看一下 | `full_review` | 业务 Agent 路由 | 调 CRM 和知识库；并行启用销售、财务、交付、合同 Agent | `deep_deal_review_brief`，页面按分析类展示 |
-| 漏斗、转化、收入、回款统计 | `stats_analysis` | 业务 Agent 路由 | 调 CRM 统计工具；启用经营分析 Agent | `stats_query`，页面按分析类展示 |
+| 折扣、付款、交付、合同都看一下 | `full_review` | 业务 Agent 路由 | 调 CRM 和 Planner 选择的其他证据；并行启用销售、财务、交付、合同 Agent | `text_analysis` |
+| 漏斗、转化、收入、回款统计 | `stats_analysis` | 业务 Agent 路由 | 调 CRM 统计工具；启用经营分析 Agent | `text_analysis` |
 | 外部行业或客户情报 | `external_research` | 业务 Agent 路由 | 按需启用外部情报 Agent，并由销售协同 Agent 成文 | `text_analysis` |
 | 保存、写入、创建跟进计划 | `followup_plan` 或 `content_draft` | 草稿回答 | 当前只生成可复制草稿，不执行写回 | `text_analysis` |
 
 ## 4. CRM 工具调用链路
 
-阶段 4 使用 Dify HTTP Request 节点调用 CordysCRM Tool API。工具地址、鉴权和运行环境配置由 Dify 环境变量或后端适配层管理，不在 DSL 中硬编码密钥。
+当前 Chatflow 使用自定义工具和 Dify HTTP Request 节点调用 CordysCRM Tool API。鉴权令牌由 Dify 自定义工具配置和后端环境配置管理。
 
 P0 查询工具：
 
 ```text
 POST /ai/deal-desk/tools/search-customers
 POST /ai/deal-desk/tools/search-opportunities
+POST /ai/deal-desk/tools/resolve-crm-object
 POST /ai/deal-desk/tools/get-customer-context
 POST /ai/deal-desk/tools/get-opportunity-context
 ```
@@ -197,7 +173,7 @@ POST /ai/deal-desk/tools/create-follow-plan
 
 ```text
 参数抽取
-  -> search-customers
+  -> Planner 调用 resolve-crm-object
   -> OK: 绑定客户或读取客户上下文
   -> OBJECT_AMBIGUOUS: 用 Markdown 列表展示候选，并提示输入完整客户名
   -> OBJECT_NOT_FOUND: 返回可恢复提示
@@ -217,7 +193,7 @@ POST /ai/deal-desk/tools/create-follow-plan
 
 ```text
 参数抽取
-  -> search-opportunities
+  -> Planner 调用 resolve-crm-object
   -> OK: 绑定商机
   -> 需要上下文: get-opportunity-context
   -> OBJECT_AMBIGUOUS: 用 Markdown 列表展示候选，并提示输入完整商机名
@@ -235,7 +211,7 @@ POST /ai/deal-desk/tools/create-follow-plan
 3. 页面路由带入的 `route_customer_id` 或 `route_opportunity_id`。
 4. Chatflow 从文本中抽取出的对象关键词。
 
-当搜索工具返回 `OBJECT_AMBIGUOUS` 时，当前 Chatflow 原始 payload 可能仍使用 `turnType = object_select` 表达对象澄清语义，但不再输出 `objectSelect` 候选卡协议。后端适配层应将它归一为分析类文本展示，前端只消费 `answerText` 中的 Markdown 候选列表，并提示用户输入完整客户名或商机名继续。
+当对象解析工具返回 `OBJECT_AMBIGUOUS` 时，Chatflow 使用 `turnType = object_select` 表达对象澄清语义，不输出 `objectSelect` 候选卡协议。前端只消费 `answerText` 中的 Markdown 候选列表，并提示用户输入完整客户名或商机名继续。
 
 ```markdown
 我查到多个匹配对象，请直接输入完整名称继续：
@@ -247,7 +223,7 @@ POST /ai/deal-desk/tools/create-follow-plan
 规则：
 
 - 候选对象必须来自 Tool API 返回值，不允许本地构造。
-- 多结果只负责澄清范围，不进入最终评审、生成写回预览或假装已经绑定对象。
+- 多结果只负责澄清范围，不进入最终评审，也不绑定任何候选。
 - 用户下一轮输入完整客户名或商机名后，Chatflow 重新搜索并在唯一命中时写入 `boundObject`。
 - 用户说“这个商机”“这个客户”等连续对话表达时，优先沿用当前会话记忆中的唯一对象。
 - 如果唯一对象是商机，应优先调用 `get-opportunity-context`；如果唯一对象是客户，应按任务需要调用 `get-customer-context` 或继续搜索该客户下商机。
@@ -258,7 +234,7 @@ V3 只读版保留以下 Agent 角色：
 
 | Agent | 启用条件 | 输入 | 输出边界 |
 | --- | --- | --- | --- |
-| Planner | 每轮必经 | 用户问题、页面对象、会话状态、附件摘要 | 只做任务规划、对象识别和能力选择，不生成最终回答 |
+| Planner | 每轮必经 | 用户问题、页面对象、最近 5 轮记忆、附件摘要 | 规划任务、查证新对象并决定证据与 Agent；普通问答可同时返回 `direct_answer` |
 | 轻量回答 Agent | 非 CRM 或泛销售问题 | 用户问题 | 不声称查询 CRM |
 | 图片理解 Agent | 图片直答问题 | 图片/截图识别摘要 | 只基于可见内容回答，不扩展成业务评审 |
 | 销售协同 Agent | 销售推进、进展总结、话术、跟进计划 | 证据台账、回答目标 | 输出推进判断和行动建议 |
@@ -349,8 +325,6 @@ interface DealDeskChatflowPayload {
     | 'quick_answer'
     | 'object_select'
     | 'text_analysis'
-    | 'deep_deal_review_brief'
-    | 'stats_query'
     | 'writeback_confirm'
     | 'writeback_result'
     | 'fallback'
@@ -362,15 +336,15 @@ interface DealDeskChatflowPayload {
 }
 ```
 
-阶段 4 不新增前端必填字段。若后续 DSL 改造发现协议必须变化，应先更新 `docs/06`，再改前端或后端适配层。
+当前不新增前端必填字段。若协议发生变化，应同步更新 `docs/06`、前端类型和后端 DTO。
 
-当前 V3 只读版保留 `writeback_confirm` 和 `writeback_result` 作为前端协议兼容类型，但 Chatflow 不主动产出这两个 `turnType`；显式写回类问法会降级为 `text_analysis` 草稿回答。`object_select`、`deep_deal_review_brief`、`stats_query` 是当前 DSL 的原始业务类型，页面展示上仍按文本分析类处理，不应新增用户可见的内部标签。
+当前 V3 保留 `writeback_confirm` 和 `writeback_result` 作为前端协议兼容类型，但 Chatflow 不主动产出这两个 `turnType`；显式写回类问法按内容草稿处理。`object_select` 用于真实多候选澄清，其他分析任务统一使用 `text_analysis`。
 
 ## 9. 异常与恢复
 
 | 场景 | Chatflow 行为 |
 | --- | --- |
-| `OBJECT_AMBIGUOUS` | 原始 payload 可为 `object_select`，后端/前端按分析类文本展示，用 Markdown 列表展示候选并提示输入完整名称 |
+| `OBJECT_AMBIGUOUS` | 返回 `object_select`，用 Markdown 列表展示候选并提示输入完整名称 |
 | `OBJECT_NOT_FOUND` | 说明未找到，提示补充关键词或切换对象 |
 | `INVALID_ARGUMENT` | 说明缺少必要信息，要求用户补充 |
 | `PERMISSION_DENIED` | 说明当前账号无权访问该对象 |
@@ -382,24 +356,24 @@ interface DealDeskChatflowPayload {
 
 异常输出不得暴露内部节点、接口栈、Prompt、token、模型供应商或原始敏感响应。
 
-## 10. DSL 改造顺序
+## 10. 当前实现状态
 
-阶段 4 后续实施按以下顺序推进：
+当前已完成：
 
-1. 保留对前端稳定的最终协议字段，内部节点可以按只读多 Agent 协作协议重组。
-2. 将主路由升级为 Planner，输出任务类型、回答目标、证据需求、所需 Agent 和成功标准。
-3. 将 CRM、知识库、外部情报、图片/附件统一沉淀为证据台账，避免各节点直接争夺最终回答职责。
-4. 将销售、财务、交付、合同、经营分析 Agent 限定为领域判断角色，统一交给 CRM 业务回答生成 Agent 成文。
-5. 移除当前 YML 的写回执行链路，协议适配层固定输出 `writeback: {}`。
-6. 增加拓扑与协议 smoke test，检查断边、重复节点、旧写回节点残留和关键只读链路。
-7. 用 `docs/10-实施路线与验收清单.md` 的自由问法验收集逐条验证。
+1. Planner 任务规划和单一 CRM 对象解析工具。
+2. CRM、知识库、外部情报和附件统一进入证据台账。
+3. 销售、财务、交付、合同与经营分析角色按需运行。
+4. 完整评审的四个领域节点并行执行。
+5. 长回答直接流式输出，短回答经协议适配输出。
+6. 后端按稳定节点 ID 生成判断过程事件。
+7. 写回执行链路停用，保留兼容字段。
 
-## 11. 阶段 4 完成标准
+## 11. 当前验收标准
 
-阶段 4 完成时应满足：
+当前版本应持续满足：
 
 - `docs/09-Agent 与 Chatflow 设计.md` 成为 Agent 和 Chatflow 改造主依据。
-- 当前 `chatflows/ai-deal-desk-v3.example.yml` 的 CRM 查询候选不再依赖本地 mock。
+- 当前 `AI Deal Desk - V3 Stable Enhanced.yml` 的 CRM 查询候选不依赖本地 mock。
 - 客户和商机查询通过 CordysCRM Tool API 完成。
 - 多候选对象必须以 Markdown 列表澄清，不猜测、不生成候选卡片。
 - 商机上下文通过标准上下文包分发给专项 Agent。

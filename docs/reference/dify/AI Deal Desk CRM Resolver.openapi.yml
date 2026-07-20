@@ -4,7 +4,7 @@ info:
   version: 1.0.0
   description: 供 AI Deal Desk 规划器确认真实 CRM 客户或商机对象。
 servers:
-  - url: https://your-domain.example.com/anonymous/ai/deal-desk/dify-tools
+  - url: https://custodian-widen-upswing.ngrok-free.dev/anonymous/ai/deal-desk/dify-tools
 security:
   - DifyToolToken: []
 paths:
